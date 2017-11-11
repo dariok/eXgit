@@ -34,7 +34,7 @@ public class GitFunctions extends BasicFunction {
 			        	)
 			    },
 			    new FunctionReturnSequenceType(
-			    		Type.STRING,
+			    		Type.DOUBLE,
 			    		Cardinality.EXACTLY_ONE,
 			    		"the commit hash.")
 			),
@@ -45,7 +45,7 @@ public class GitFunctions extends BasicFunction {
 					new FunctionReturnSequenceType(
 							Type.STRING,
 							Cardinality.EXACTLY_ONE,
-							"the  reply."
+							"the reply."
 					)
 			)
 	};
@@ -55,11 +55,20 @@ public class GitFunctions extends BasicFunction {
     }
 
 	public Sequence eval(Sequence[] args, Sequence contextSequence) throws XPathException {
-		// is argument the empty sequence?
-		if (args[0].isEmpty())
-			return Sequence.EMPTY_SEQUENCE;
-		// iterate through the argument sequence and echo each item
+		String functionName = getSignature().getName().getLocalPart();
 		Sequence result;
+		
+		switch (functionName) {
+		case "commit":
+			result = new DoubleValue(3);
+			break;
+		case "push":
+			result = new StringValue("okay");
+			break;
+		default:
+			throw new XPathException(new ErrorCode("E01", "function not found"), "The requested function was not found in this module");
+		}
+		
 		result = new DoubleValue(2);
 		return result;
 	}
