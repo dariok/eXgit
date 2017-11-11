@@ -69,7 +69,6 @@ public class GitFunctions extends BasicFunction {
 			throw new XPathException(new ErrorCode("E01", "function not found"), "The requested function was not found in this module");
 		}
 		
-		result = new DoubleValue(2);
 		return result;
 	}
 }
