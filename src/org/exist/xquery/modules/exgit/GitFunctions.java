@@ -59,32 +59,14 @@ public class GitFunctions extends BasicFunction {
 			throw new XPathException(new ErrorCode("exgit01", "XMLDB error"), dbe.toString());
 		}
 
-		Collection col;
-		//XMLResource res;
-
 		switch (functionName) {
 		case "commit":
-			try {
-				col = DatabaseManager.getCollection(URI + args[0].toString());
-			} catch (Exception e2) {
-				throw new XPathException(new ErrorCode("exgit02", "Error getting coll.: " + e2.toString()), e2.toString());
-			}
+			result.addAll(list(args[0].toString()));
 			
-			/*String[] listR;
-			try {
-				listR = col.listResources();
-			} catch (XMLDBException e1) {
-				throw new XPathException(new ErrorCode("exgit02a", e1.toString()), e1.toString());
-			}*/
-			
-			try {
-				result.add(new StringValue(args.toString()));
-				result.add(new StringValue(col.getName()));
-				result.add(new IntegerValue(col.getResourceCount()));
-			} catch (XMLDBException e) {
-				throw new XPathException(new ErrorCode("exgit03", e.toString()), e.toString());
-			}
-			
+			/* TODO somehow store within the collection that it belongs to a git repo and which repo that is
+			 * and where that repo  is to be found on the file system
+			 */
+			// TODO export the files in the collection to the external directory to invoke the git magic
 			break;
 		case "push":
 			result.add(new StringValue("okay"));
@@ -94,6 +76,33 @@ public class GitFunctions extends BasicFunction {
 					"The requested function was not found in this module");
 		}
 
+		return result;
+	}
+	
+	private Sequence list(String collection) throws XPathException {
+		ValueSequence result = new ValueSequence();
+		Collection col;
+		
+		try {
+			col = DatabaseManager.getCollection(URI + collection);
+		} catch (Exception e2) {
+			throw new XPathException(new ErrorCode("exgit02", "Error getting coll.: " + e2.toString()), e2.toString());
+		}
+		
+		// now we have a list of all the documents in our given collection
+		try {
+			for (String file : col.listResources()) {
+				result.add(new StringValue(collection + '/' + file));
+			}
+			for (String coll : col.listChildCollections()) {
+				result.add(new StringValue("Collection: " + collection + '/' + coll));
+				result.addAll(list(collection + '/' + coll));
+			}
+			//result.add(new StringValue(col.listResources()));
+		} catch (XMLDBException e) {
+			throw new XPathException(new ErrorCode("exgit03", e.toString()), e.toString());
+		}
+		
 		return result;
 	}
 }
