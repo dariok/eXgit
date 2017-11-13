@@ -42,15 +42,13 @@ public class GitFunctions extends BasicFunction {
 			new FunctionSignature(new QName("push", Exgit.NAMESPACE_URI, Exgit.PREFIX), "Execute git push.", null,
 					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE, "the reply.")) };
 
-	private Sequence result;
-
 	public GitFunctions(XQueryContext context, FunctionSignature signature) {
 		super(context, signature);
 	}
 
 	public Sequence eval(Sequence[] args, Sequence contextSequence) throws XPathException {
 		String functionName = getSignature().getName().getLocalPart();
-		result = null;
+		ValueSequence result = new ValueSequence();
 
 		// initialize database driver
 		try {
