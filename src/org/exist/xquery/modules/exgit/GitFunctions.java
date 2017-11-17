@@ -1,10 +1,17 @@
 package org.exist.xquery.modules.exgit;
 
-import org.eclipse.jgit.api.Git;
-
+import org.eclipse.jgit.api.*;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.errors.NoWorkTreeException;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.xmldb.api.base.*;
 import org.xmldb.api.modules.*;
 import org.xmldb.api.*;
+
+import java.io.File;
+import java.io.IOException;
+
 import javax.xml.transform.OutputKeys;
 import org.exist.xmldb.EXistResource;
 
@@ -58,10 +65,33 @@ public class GitFunctions extends BasicFunction {
 		} catch (Exception dbe) {
 			throw new XPathException(new ErrorCode("exgit01", "XMLDB error"), dbe.toString());
 		}
+		
+		// TODO load configuration from a file in the database
+		// Should this be a configuration file in /db/system or should it be stored in the collection?
+		// initialize the git repo
+		FileRepositoryBuilder builder = new FileRepositoryBuilder();
+		
+		File repo = new File("/c/users/dkampkaspar/GitHub/spielwiese");
+		
+		Repository repository;
+		try {
+			repository = builder.setGitDir(repo).readEnvironment().findGitDir().build();
+		} catch (IOException e) {
+			throw new XPathException(new ErrorCode("exgit00", "I/O Error: " + repo.toString()), e.toString());
+		}
 
 		switch (functionName) {
 		case "commit":
 			result.addAll(list(args[0].toString()));
+			Git git = new Git(repository);
+			
+			String status;
+			try {
+				status = git.status().call().toString();
+			} catch (NoWorkTreeException | GitAPIException e) {
+				throw new XPathException(new ErrorCode("exgit00a", "Git API Error: " + git.toString()), e.toString());
+			}
+			result.add(new StringValue(status));
 			
 			/* TODO somehow store within the collection that it belongs to a git repo and which repo that is
 			 * and where that repo  is to be found on the file system
