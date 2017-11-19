@@ -3,8 +3,15 @@ package org.exist.xquery.modules.exgit;
 import org.eclipse.jgit.api.*;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.errors.NoWorkTreeException;
+import org.eclipse.jgit.lib.IndexDiff;
+import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
+import org.eclipse.jgit.transport.PushResult;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.eclipse.jgit.treewalk.FileTreeIterator;
+import org.eclipse.jgit.treewalk.WorkingTreeIterator;
 import org.xmldb.api.base.*;
 import org.xmldb.api.modules.*;
 import org.xmldb.api.*;
@@ -43,8 +50,18 @@ public class GitFunctions extends BasicFunction {
 
 	public final static FunctionSignature signature[] = {
 			new FunctionSignature(new QName("commit", Exgit.NAMESPACE_URI, Exgit.PREFIX), "Execute a git commit.",
-					new SequenceType[] { new FunctionParameterSequenceType("message", Type.STRING,
-							Cardinality.EXACTLY_ONE, "The commit message.") },
+					new SequenceType[] {
+							new FunctionParameterSequenceType("repoDir", Type.STRING,
+									Cardinality.EXACTLY_ONE, "The path to the local repo"),
+							new FunctionParameterSequenceType("message", Type.STRING,
+									Cardinality.EXACTLY_ONE, "The commit message."),
+							new FunctionParameterSequenceType("remote", Type.STRING,
+									Cardinality.EXACTLY_ONE, "The remote."),
+							new FunctionParameterSequenceType("usernae", Type.STRING,
+									Cardinality.EXACTLY_ONE, "The user for authentication."),
+							new FunctionParameterSequenceType("password", Type.STRING,
+									Cardinality.EXACTLY_ONE, "The remote password.")
+							},
 					new FunctionReturnSequenceType(Type.DOUBLE, Cardinality.EXACTLY_ONE, "the commit hash.")),
 			new FunctionSignature(new QName("push", Exgit.NAMESPACE_URI, Exgit.PREFIX), "Execute git push.", null,
 					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE, "the reply.")) };
@@ -71,28 +88,56 @@ public class GitFunctions extends BasicFunction {
 		// initialize the git repo
 		FileRepositoryBuilder builder = new FileRepositoryBuilder();
 		
-		File repo = new File("/c/users/dkampkaspar/GitHub/spielwiese");
+		String dirpath = args[0].toString();
+		String message = args[1].toString();
+		String remotes = args[2].toString();
+		String username = args[3].toString();
+		String password = args[4].toString();
 		
 		Repository repository;
+		File repo;
+		String path;
 		try {
-			repository = builder.setGitDir(repo).readEnvironment().findGitDir().build();
+			repo = new File(dirpath);
+			path = repo.getCanonicalPath();
+			repository = builder.findGitDir(repo).readEnvironment().build();
 		} catch (IOException e) {
-			throw new XPathException(new ErrorCode("exgit00", "I/O Error: " + repo.toString()), e.toString());
+			throw new XPathException(new ErrorCode("exgit00", "I/O Error: " + dirpath), e.toString());
 		}
 
 		switch (functionName) {
 		case "commit":
-			result.addAll(list(args[0].toString()));
+			//result.addAll(list(args[0].toString()));
 			Git git = new Git(repository);
 			
 			String status;
+			String mod;
+			RevCommit c;
 			try {
-				status = git.status().call().toString();
-			} catch (NoWorkTreeException | GitAPIException e) {
+				Status stat = git.status().call();
+				status = stat.getChanged().toString();
+				mod = stat.getModified().toString();
+				git.add().addFilepattern(".").call();
+				c = git.commit().setMessage(message).call();
+			} catch (Exception e) {
 				throw new XPathException(new ErrorCode("exgit00a", "Git API Error: " + git.toString()), e.toString());
 			}
+			result.add(new StringValue(args[0].toString()));
+			result.add(new StringValue(path));
 			result.add(new StringValue(status));
+			result.add(new StringValue(mod));
+			result.add(new StringValue(c.getId().toString()));
+			result.add(new StringValue(c.getAuthorIdent().toString()));
+			Iterable<PushResult> p;
+			try {
+				p = git.push().setRemote(remotes)
+						.setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, password)).call();
+			} catch (GitAPIException e) {
+				// TODO Auto-generated catch block
+				throw new XPathException(new ErrorCode("exgit03", "Git Push error: " + git.toString()), e.toString());
+			}
 			
+			result.add(new StringValue(p.iterator().next().getMessages()));
 			/* TODO somehow store within the collection that it belongs to a git repo and which repo that is
 			 * and where that repo  is to be found on the file system
 			 */
