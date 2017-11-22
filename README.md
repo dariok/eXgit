@@ -12,6 +12,8 @@ provides XQuery access to git
 # install
 
 1. copy `target/exgit-0.1-jar-with-dependencies.jar` into your exist-db home directory `eXist-db HOME/lib/user`
-2. register eXgit module in `exist-db HOME/conf.xml`
+2. register eXgit module in `exist-db HOME/conf.xml`:
 
-ToDO: provide snippet
+Within `exist/xquery/builtin-modules`:
+
+    <module uri="http://exist-db.org/xquery/exgit" class="org.exist.xquery.modules.exgit.Exgit"/>
