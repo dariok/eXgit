@@ -29,11 +29,27 @@ or upgrading the module).
 
 Currently, the following functions are available:
 
-1. `exgit:sync($repoDir, $collection, $dateTime)` – 
+1. `exgit:sync($repoDir, $collection, $dateTime)` –
 sync `$collection` from the database to the local git repo `$repodir`
 1. `exgit:commit($repoDir, $message)` – equal to `git commit -a -m'$message'` invoked in  `$repodir`
-1. `exgit:push($repoDir, $remote, $username, $password)` – 
+1. `exgit:push($repoDir, $remote, $username, $password)` –
 push to `$remote` (e.g. 'origin') supplying you user credentials
+
+### example script - to run in eXide
+
+```XQuery
+xquery version "3.1";
+import module namespace exgit="http://exist-db.org/xquery/exgit" at "java:org.exist.xquery.module.exgit.Exgit";
+
+let $repoDir := "C:\Users\user\Desktop\gittest"
+let $collection := "/db/apps/dsebaseapp/data"
+let $sync := exgit:sync($repoDir, $collection, ())
+let $message := "changes in data"
+let $commit := exgit:commit($repoDir, $message)
+let $push := exgit:push($repoDir, "origin", "username", "password")
+
+return $sync
+```
 
 ## Caveats and future
 Currently, HTTP is used as transport and the user credentials have to be supplied within the XQuery.
