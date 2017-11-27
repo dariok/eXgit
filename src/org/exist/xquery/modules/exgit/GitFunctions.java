@@ -2,6 +2,13 @@ package org.exist.xquery.modules.exgit;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.UnsupportedEncodingException;
+import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Iterator;
 
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
@@ -12,6 +19,14 @@ import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.PushResult;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.exist.dom.QName;
+import org.exist.dom.persistent.DocumentImpl;
+import org.exist.security.PermissionDeniedException;
+import org.exist.storage.lock.Lock.LockMode;
+import org.exist.storage.serializers.Serializer;
+import org.exist.util.LockException;
+import org.exist.util.serializer.SAXSerializer;
+import org.exist.util.serializer.SerializerPool;
+import org.exist.xmldb.XmldbURI;
 import org.exist.xquery.modules.file.*;
 import org.exist.xquery.BasicFunction;
 import org.exist.xquery.Cardinality;
@@ -26,10 +41,13 @@ import org.exist.xquery.value.SequenceType;
 import org.exist.xquery.value.StringValue;
 import org.exist.xquery.value.Type;
 import org.exist.xquery.value.ValueSequence;
+import org.xml.sax.SAXException;
 import org.xmldb.api.DatabaseManager;
 import org.xmldb.api.base.Collection;
 import org.xmldb.api.base.Database;
 import org.xmldb.api.base.XMLDBException;
+
+import com.siemens.ct.exi.values.BooleanValue;
 
 public class GitFunctions extends BasicFunction {
 	private static String URI = "xmldb:exist:///db/";
@@ -72,9 +90,9 @@ public class GitFunctions extends BasicFunction {
 							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The full path to the local git repository"),
 							new FunctionParameterSequenceType("collection", Type.STRING, Cardinality.EXACTLY_ONE,
-									"The collection to sync."),
+									"The collection to sync.")/*,
 							new FunctionParameterSequenceType("dateTime", Type.DATE_TIME, Cardinality.ZERO_OR_ONE,
-									"Optional: only resources modified after the given date/time will be synchronized.") },
+									"Optional: only resources modified after the given date/time will be synchronized.")*/ },
 					new FunctionReturnSequenceType(Type.BOOLEAN, Cardinality.EXACTLY_ONE,
 							"true if successful, false otherwise")) };
 
@@ -167,9 +185,10 @@ public class GitFunctions extends BasicFunction {
 			result.add(new StringValue(p.iterator().next().getMessages()));
 			break;
 		case "sync":
-			Sequence nargs[] = {args[1], args[0], args[2]}; 
+			/*Sequence nargs[] = {args[1], args[0], args[2]}; 
 			Sync sync = new Sync(context);
-			sync.eval(nargs, contextSequence);
+			sync.eval(nargs, contextSequence);*/
+			result.add(new StringValue(syncCollection(args[0].toString(), args[1].toString())));
 			break;
 		case "pull":
 			// TODO ggf. high level functionen anbieten
@@ -186,10 +205,91 @@ public class GitFunctions extends BasicFunction {
 		return result;
 	}
 	
-	private void syncCollection(String pathToLocal, String Collection) {
+	/* error codes 2xy */
+	private String syncCollection(String pathToLocal, String pathToCollection) throws XPathException {
+		Path repo = getRepo(pathToLocal);
+		org.exist.collections.Collection collection = getCollection(pathToCollection);
 		
+		Iterator<DocumentImpl> documents;
+		Iterator<XmldbURI> subcollections;
+		try {
+			documents = collection.iterator(context.getBroker());
+			subcollections = collection.collectionIterator(context.getBroker());
+		} catch (PermissionDeniedException e) {
+			throw new XPathException(new ErrorCode("exgit201", "permission denied"),
+					"Access to the requested collection's contents was denied.");
+		} catch (LockException e) {
+			throw new XPathException(new ErrorCode("exgit202", "locking error"),
+					"Failed to obtain a lock on " + collection.getURI().toString() + ".");
+		}
+		
+		while (documents.hasNext()) {
+			DocumentImpl doc = documents.next();
+			Serializer serializer = context.getBroker().getSerializer();
+			
+			Path filePath = Paths.get(repo.toString(), doc.getFileURI().toString());
+			
+			Writer writer;
+			try {
+				writer = new OutputStreamWriter(Files.newOutputStream(filePath), "UTF-8");
+			} catch (UnsupportedEncodingException e) {
+				throw new XPathException(new ErrorCode("exgit211", "unknown encoding"),
+						"The JRE does not know UTF-8; sth very strange is going on.");
+			} catch (IOException e) {
+				throw new XPathException(new ErrorCode("exgit212", "I/O error"),
+						"Cannot write to " + filePath.toString() + ".");
+			}
+			
+			try {
+				serializer.serialize(doc, writer);
+			} catch (SAXException e) {
+				throw new XPathException(new ErrorCode("exgit213", "serializer exception"),
+						"Serializing " + filePath.toString() + " failed: " + e.getLocalizedMessage() + ".");
+			}
+		}
+		
+		while (subcollections.hasNext()) {
+			XmldbURI coll = subcollections.next();
+			
+			syncCollection(coll.toString(), pathToCollection);
+		}
+		
+		return collection.getURI().toString();
 	}
-
+	
+	/* exception codes 11x */
+	private org.exist.collections.Collection getCollection(String pathToCollection) throws XPathException {
+		org.exist.collections.Collection collection;
+		
+		try {
+			collection = context.getBroker().openCollection(XmldbURI.create(pathToCollection), LockMode.READ_LOCK);
+		} catch (PermissionDeniedException e) {
+			throw new XPathException(new ErrorCode("exgit111", "permission denied"),
+					"Access to the requested collection was denied.");
+		}
+		
+		if (collection == null) {
+			throw new XPathException(new ErrorCode("exgit111", "collection not found"),
+					"The requested collection was not found.");
+		}
+		
+		return collection;
+	}
+	
+	/* exception codes 10x */
+	private Path getRepo (String pathToLocal) throws XPathException {
+		Path repo = Paths.get(pathToLocal);
+		
+		if (!Files.isDirectory(repo))
+				throw new XPathException(new ErrorCode("exgit101", "no such directory"),
+						"The requested local repositoy was not found under the given path");
+		if (!Files.isWritable(repo))
+			throw new XPathException(new ErrorCode("exgit102", "not writable"),
+					"The requested local repository is not writable");
+		
+		return repo;
+	}
+	
 	private Sequence list(String collection) throws XPathException {
 		ValueSequence result = new ValueSequence();
 		Collection col;

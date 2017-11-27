@@ -15,7 +15,8 @@ public class Exgit extends AbstractInternalModule {
 	private final static FunctionDef[] functions = {
 			new FunctionDef(GitFunctions.signature[0], GitFunctions.class),
 			new FunctionDef(GitFunctions.signature[1], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[2], GitFunctions.class)
+			new FunctionDef(GitFunctions.signature[2], GitFunctions.class),
+			new FunctionDef(GitFunctions.signature[3], GitFunctions.class)
 	};
 
 	public Exgit(Map<String, List<?>> parameters) {
