@@ -237,17 +237,22 @@ public class GitFunctions extends BasicFunction {
 		return true;
 	}
 	
-	/* exception codes 0xx */
+	/* exception codes 00x */
 	private Git getRepo (String dirpath) throws XPathException {
 		FileRepositoryBuilder builder = new FileRepositoryBuilder();
 		Repository repository;
-		File repo;
+		File repo = new File(dirpath);
+		
+		FileRepositoryBuilder t = builder.findGitDir(repo).readEnvironment();
 		
 		try {
-			repo = new File(dirpath);
-			repository = builder.findGitDir(repo).readEnvironment().build();
+			repository = t.build();
 		} catch (IOException e) {
-			throw new XPathException(new ErrorCode("exgit000", "I/O Error: " + dirpath), e.toString());
+			throw new XPathException(new ErrorCode("exgit001", "I/O Error on repo"),
+					"I/O error when trying to read " + dirpath);
+		} catch (Exception e) {
+			throw new XPathException(new ErrorCode("exgit000", "not a repo"), 
+					"The directory at " + dirpath + " is not a git repo.");
 		}
 		
 		return new Git(repository);
