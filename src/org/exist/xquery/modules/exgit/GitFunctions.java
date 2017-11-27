@@ -24,10 +24,7 @@ import org.exist.security.PermissionDeniedException;
 import org.exist.storage.lock.Lock.LockMode;
 import org.exist.storage.serializers.Serializer;
 import org.exist.util.LockException;
-import org.exist.util.serializer.SAXSerializer;
-import org.exist.util.serializer.SerializerPool;
 import org.exist.xmldb.XmldbURI;
-import org.exist.xquery.modules.file.*;
 import org.exist.xquery.BasicFunction;
 import org.exist.xquery.Cardinality;
 import org.exist.xquery.ErrorCodes.ErrorCode;
@@ -42,16 +39,8 @@ import org.exist.xquery.value.StringValue;
 import org.exist.xquery.value.Type;
 import org.exist.xquery.value.ValueSequence;
 import org.xml.sax.SAXException;
-import org.xmldb.api.DatabaseManager;
-import org.xmldb.api.base.Collection;
-import org.xmldb.api.base.Database;
-import org.xmldb.api.base.XMLDBException;
-
-import com.siemens.ct.exi.values.BooleanValue;
 
 public class GitFunctions extends BasicFunction {
-	private static String URI = "xmldb:exist:///db/";
-
 	public final static FunctionSignature signature[] = {
 			new FunctionSignature(new QName("commit", Exgit.NAMESPACE_URI, Exgit.PREFIX), "Execute a git commit.",
 					new SequenceType[] {
@@ -315,7 +304,7 @@ public class GitFunctions extends BasicFunction {
 		return repo;
 	}
 
-	
+	/*
 	private Sequence list(String collection) throws XPathException {
 		ValueSequence result = new ValueSequence();
 		Collection col;
@@ -341,5 +330,5 @@ public class GitFunctions extends BasicFunction {
 		}
 
 		return result;
-	}
+	}*/
 }
