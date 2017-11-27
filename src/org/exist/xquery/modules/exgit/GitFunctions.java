@@ -42,6 +42,17 @@ public class GitFunctions extends BasicFunction {
 							new FunctionParameterSequenceType("message", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The commit message.") },
 					new FunctionReturnSequenceType(Type.DOUBLE, Cardinality.EXACTLY_ONE, "the commit hash.")),
+			new FunctionSignature(new QName("commit", Exgit.NAMESPACE_URI, Exgit.PREFIX), "Execute a git commit.",
+					new SequenceType[] {
+							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The full path to the local git repository"),
+							new FunctionParameterSequenceType("message", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The commit message."),
+							new FunctionParameterSequenceType("authorName", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The name to set as author."),
+							new FunctionParameterSequenceType("authorMail", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The eMail to set for the author.")},
+					new FunctionReturnSequenceType(Type.DOUBLE, Cardinality.EXACTLY_ONE, "the commit hash.")),
 			new FunctionSignature(new QName("push", Exgit.NAMESPACE_URI, Exgit.PREFIX), "Execute git push.",
 					new SequenceType[] {
 							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
@@ -58,7 +69,7 @@ public class GitFunctions extends BasicFunction {
 							+ "If $dateTime is given, only resources modified after this time stamp are taken into account. "
 							+ "This method is only available to the DBA role.",
 					new SequenceType[] {
-							new FunctionParameterSequenceType("repoDir", Type.ITEM, Cardinality.EXACTLY_ONE,
+							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The full path to the local git repository"),
 							new FunctionParameterSequenceType("collection", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The collection to sync."),
@@ -119,7 +130,12 @@ public class GitFunctions extends BasicFunction {
 				status = stat.getChanged().toString();
 				mod = stat.getModified().toString();
 				git.add().addFilepattern(".").call();
-				c = git.commit().setMessage(message).call();
+				
+				if (args.length == 2) {
+					c = git.commit().setMessage(message).call();
+				} else {
+					c = git.commit().setMessage(message).setAuthor(args[2].toString(), args[3].toString()).call();
+				}
 			} catch (Exception e) {
 				throw new XPathException(new ErrorCode("exgit00a", "Git API Error: " + git.toString()), e.toString());
 			} finally {
@@ -155,6 +171,10 @@ public class GitFunctions extends BasicFunction {
 			Sync sync = new Sync(context);
 			sync.eval(nargs, contextSequence);
 			break;
+		case "pull":
+			// TODO ggf. high level functionen anbieten
+		case "import":
+			// TODO vorher prüfen, ob wohlgeformt
 		default:
 			git.close();
 			throw new XPathException(new ErrorCode("E01", "function not found"),
@@ -164,6 +184,10 @@ public class GitFunctions extends BasicFunction {
 		git.close();
 		
 		return result;
+	}
+	
+	private void syncCollection(String pathToLocal, String Collection) {
+		
 	}
 
 	private Sequence list(String collection) throws XPathException {
