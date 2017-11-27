@@ -228,10 +228,20 @@ public class GitFunctions extends BasicFunction {
 			}
 			
 			try {
+				serializer.reset();
 				serializer.serialize(doc, writer);
+				
 			} catch (SAXException e) {
 				throw new XPathException(new ErrorCode("exgit213", "serializer exception"),
 						"Serializing " + filePath.toString() + " failed: " + e.getLocalizedMessage() + ".");
+			}
+			finally {
+				try {
+					writer.close();
+				} catch (Exception e) {
+					throw new XPathException(new ErrorCode("exgit214", "serializer exception"),
+							"Cannot close " + filePath.toString() + ": " + e.getLocalizedMessage() + ".");
+				}
 			}
 		}
 		
