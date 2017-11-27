@@ -31,6 +31,7 @@ import org.exist.xquery.ErrorCodes.ErrorCode;
 import org.exist.xquery.FunctionSignature;
 import org.exist.xquery.XPathException;
 import org.exist.xquery.XQueryContext;
+import org.exist.xquery.value.BooleanValue;
 import org.exist.xquery.value.FunctionParameterSequenceType;
 import org.exist.xquery.value.FunctionReturnSequenceType;
 import org.exist.xquery.value.Sequence;
@@ -92,22 +93,14 @@ public class GitFunctions extends BasicFunction {
 	public Sequence eval(Sequence[] args, Sequence contextSequence) throws XPathException {
 		String functionName = getSignature().getName().getLocalPart();
 		ValueSequence result = new ValueSequence();
-
-		// initialize database driver
-		/*try {
-			Database database = (Database) org.exist.xmldb.DatabaseImpl.class.newInstance();
-			database.setProperty("create-database", "true");
-			DatabaseManager.registerDatabase(database);
-		} catch (Exception dbe) {
-			throw new XPathException(new ErrorCode("exgit01", "XMLDB error"), dbe.toString());
-		}*/
 		
 		/* TODO somehow store within the collection that it belongs to a git repo and which repo that is
 		 * and where that repo  is to be found on the file system
 		 */
 		// TODO load configuration from a file in the database
 		// Should this be a configuration file in /db/system or should it be stored in the collection?
-		// initialize the git repo
+		
+		// TODO function to initialize the git repo
 		
 		Git git;
 		switch (functionName) {
@@ -116,12 +109,12 @@ public class GitFunctions extends BasicFunction {
 			
 			git = getRepo(args[0].toString());
 			
-			String status;
-			String mod;
+			String chg;	// changed files
+			String mod;	// modified files
 			RevCommit c;
 			try {
 				Status stat = git.status().call();
-				status = stat.getChanged().toString();
+				chg = stat.getChanged().toString();
 				mod = stat.getModified().toString();
 				git.add().addFilepattern(".").call();
 				
@@ -130,17 +123,18 @@ public class GitFunctions extends BasicFunction {
 				} else {
 					c = git.commit().setMessage(message).setAuthor(args[2].toString(), args[3].toString()).call();
 				}
-			} catch (Exception e) {
-				throw new XPathException(new ErrorCode("exgit301", "Git API Error: " + git.toString()), e.toString());
+			} catch (GitAPIException e) {
+				throw new XPathException(new ErrorCode("exgit301", "Git API Error on commit"),
+						"Error committing: " + e.getLocalizedMessage());
 			} finally {
 				git.close();
 			}
 			
-			result.add(new StringValue(args[0].toString()));
-			result.add(new StringValue(status));
-			result.add(new StringValue(mod));
-			result.add(new StringValue(c.getId().toString()));
-			result.add(new StringValue(c.getAuthorIdent().toString()));
+			result.add(new StringValue("Path to local repo: " + args[0].toString()));
+			result.add(new StringValue("Changed: " + chg));
+			result.add(new StringValue("Modified: " + mod));
+			result.add(new StringValue("Revision: " + c.getId().toString()));
+			result.add(new StringValue("Author: " + c.getAuthorIdent().toString()));
 			
 			break;
 		case "push":
@@ -155,8 +149,8 @@ public class GitFunctions extends BasicFunction {
 				p = git.push().setRemote(remotes)
 						.setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, password)).call();
 			} catch (GitAPIException e) {
-				// TODO Auto-generated catch block
-				throw new XPathException(new ErrorCode("exgit311", "Git Push error: " + git.toString()), e.toString());
+				throw new XPathException(new ErrorCode("exgit311", "Git API error on push"),
+						"Error pushing to remote repo at " + remotes + ": " + e.toString());
 			} finally {
 				git.close();
 			}
@@ -164,25 +158,22 @@ public class GitFunctions extends BasicFunction {
 			result.add(new StringValue(p.iterator().next().getMessages()));
 			break;
 		case "sync":
-			/*Sequence nargs[] = {args[1], args[0], args[2]}; 
-			Sync sync = new Sync(context);
-			sync.eval(nargs, contextSequence);*/
-			result.add(new StringValue(syncCollection(args[0].toString(), args[1].toString())));
+			result.add(new BooleanValue(syncCollection(args[0].toString(), args[1].toString())));
 			break;
 		case "pull":
 			// TODO ggf. high level functionen anbieten
 		case "import":
 			// TODO vorher prüfen, ob wohlgeformt
 		default:
-			throw new XPathException(new ErrorCode("E01", "function not found"),
-					"The requested function was not found in this module");
+			throw new XPathException(new ErrorCode("exgit000", "function not found"),
+					"The requested function " + functionName + " was not found in this module");
 		}
 		
 		return result;
 	}
 	
 	/* error codes 2xy */
-	private String syncCollection(String pathToLocal, String pathToCollection) throws XPathException {
+	private boolean syncCollection(String pathToLocal, String pathToCollection) throws XPathException {
 		Path repo = getDir(pathToLocal);
 		org.exist.collections.Collection collection = getCollection(pathToCollection);
 		
@@ -243,7 +234,7 @@ public class GitFunctions extends BasicFunction {
 		
 		collection.release(LockMode.READ_LOCK);
 		
-		return collection.getURI().toString();
+		return true;
 	}
 	
 	/* exception codes 0xx */
