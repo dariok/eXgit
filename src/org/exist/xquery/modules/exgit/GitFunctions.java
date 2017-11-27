@@ -119,26 +119,13 @@ public class GitFunctions extends BasicFunction {
 		// TODO load configuration from a file in the database
 		// Should this be a configuration file in /db/system or should it be stored in the collection?
 		// initialize the git repo
-		FileRepositoryBuilder builder = new FileRepositoryBuilder();
 		
-		String dirpath = args[0].toString();
-		
-		Repository repository;
-		File repo;
-		String path;
-		try {
-			repo = new File(dirpath);
-			path = repo.getCanonicalPath();
-			repository = builder.findGitDir(repo).readEnvironment().build();
-		} catch (IOException e) {
-			throw new XPathException(new ErrorCode("exgit00", "I/O Error: " + dirpath), e.toString());
-		}
-		
-		Git git = new Git(repository);
-
+		Git git;
 		switch (functionName) {
 		case "commit":
 			String message = args[1].toString();
+			
+			git = getRepo(args[0].toString());
 			
 			String status;
 			String mod;
@@ -155,12 +142,12 @@ public class GitFunctions extends BasicFunction {
 					c = git.commit().setMessage(message).setAuthor(args[2].toString(), args[3].toString()).call();
 				}
 			} catch (Exception e) {
-				throw new XPathException(new ErrorCode("exgit00a", "Git API Error: " + git.toString()), e.toString());
+				throw new XPathException(new ErrorCode("exgit301", "Git API Error: " + git.toString()), e.toString());
 			} finally {
 				git.close();
 			}
+			
 			result.add(new StringValue(args[0].toString()));
-			result.add(new StringValue(path));
 			result.add(new StringValue(status));
 			result.add(new StringValue(mod));
 			result.add(new StringValue(c.getId().toString()));
@@ -171,13 +158,16 @@ public class GitFunctions extends BasicFunction {
 			String remotes = args[1].toString();
 			String username = args[2].toString();
 			String password = args[3].toString();
+			
+			git = getRepo(args[0].toString());
+			
 			Iterable<PushResult> p;
 			try {
 				p = git.push().setRemote(remotes)
 						.setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, password)).call();
 			} catch (GitAPIException e) {
 				// TODO Auto-generated catch block
-				throw new XPathException(new ErrorCode("exgit03", "Git Push error: " + git.toString()), e.toString());
+				throw new XPathException(new ErrorCode("exgit311", "Git Push error: " + git.toString()), e.toString());
 			} finally {
 				git.close();
 			}
@@ -195,19 +185,16 @@ public class GitFunctions extends BasicFunction {
 		case "import":
 			// TODO vorher prüfen, ob wohlgeformt
 		default:
-			git.close();
 			throw new XPathException(new ErrorCode("E01", "function not found"),
 					"The requested function was not found in this module");
 		}
-		
-		git.close();
 		
 		return result;
 	}
 	
 	/* error codes 2xy */
 	private String syncCollection(String pathToLocal, String pathToCollection) throws XPathException {
-		Path repo = getRepo(pathToLocal);
+		Path repo = getDir(pathToLocal);
 		org.exist.collections.Collection collection = getCollection(pathToCollection);
 		
 		Iterator<DocumentImpl> documents;
@@ -251,10 +238,29 @@ public class GitFunctions extends BasicFunction {
 		while (subcollections.hasNext()) {
 			XmldbURI coll = subcollections.next();
 			
-			syncCollection(coll.toString(), pathToCollection);
+			syncCollection(repo.toString() + "/" + coll.toString(),
+					pathToCollection + "/" + coll.toString());
 		}
 		
+		collection.release(LockMode.READ_LOCK);
+		
 		return collection.getURI().toString();
+	}
+	
+	/* exception codes 0xx */
+	private Git getRepo (String dirpath) throws XPathException {
+		FileRepositoryBuilder builder = new FileRepositoryBuilder();
+		Repository repository;
+		File repo;
+		
+		try {
+			repo = new File(dirpath);
+			repository = builder.findGitDir(repo).readEnvironment().build();
+		} catch (IOException e) {
+			throw new XPathException(new ErrorCode("exgit000", "I/O Error: " + dirpath), e.toString());
+		}
+		
+		return new Git(repository);
 	}
 	
 	/* exception codes 11x */
@@ -265,30 +271,40 @@ public class GitFunctions extends BasicFunction {
 			collection = context.getBroker().openCollection(XmldbURI.create(pathToCollection), LockMode.READ_LOCK);
 		} catch (PermissionDeniedException e) {
 			throw new XPathException(new ErrorCode("exgit111", "permission denied"),
-					"Access to the requested collection was denied.");
+					"Access to the requested collection " + pathToCollection + " was denied.");
 		}
 		
 		if (collection == null) {
 			throw new XPathException(new ErrorCode("exgit111", "collection not found"),
-					"The requested collection was not found.");
+					"The requested collection " + pathToCollection + " was not found.");
 		}
 		
 		return collection;
 	}
 	
 	/* exception codes 10x */
-	private Path getRepo (String pathToLocal) throws XPathException {
+	private Path getDir (String pathToLocal) throws XPathException {
 		Path repo = Paths.get(pathToLocal);
 		
-		if (!Files.isDirectory(repo))
+		if (Files.exists(repo) && !Files.isDirectory(repo))
 				throw new XPathException(new ErrorCode("exgit101", "no such directory"),
-						"The requested local repositoy was not found under the given path");
-		if (!Files.isWritable(repo))
+						"The requested local repository was not found under the given path " + repo.toString() + ".");
+		if (Files.exists(repo) && !Files.isWritable(repo))
 			throw new XPathException(new ErrorCode("exgit102", "not writable"),
-					"The requested local repository is not writable");
+					"The requested local repository " + repo.toString() + " is not writable");
+		
+		if (!Files.exists(repo)) {
+			try {
+				Files.createDirectory(repo);
+			} catch (IOException e) {
+				throw new XPathException(new ErrorCode("exgit103", "cannot create directory"),
+						"The requested local directory " + repo.toString() + " could not be created");
+			}
+		}
 		
 		return repo;
 	}
+
 	
 	private Sequence list(String collection) throws XPathException {
 		ValueSequence result = new ValueSequence();
