@@ -19,11 +19,16 @@ import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.PushResult;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.exist.EXistException;
+import org.exist.collections.IndexInfo;
 import org.exist.dom.QName;
 import org.exist.dom.persistent.DocumentImpl;
 import org.exist.security.PermissionDeniedException;
+import org.exist.storage.BrokerPool;
 import org.exist.storage.lock.Lock.LockMode;
 import org.exist.storage.serializers.Serializer;
+import org.exist.storage.txn.TransactionException;
+import org.exist.storage.txn.Txn;
 import org.exist.util.LockException;
 import org.exist.xmldb.XmldbURI;
 import org.exist.xquery.BasicFunction;
@@ -230,29 +235,90 @@ public class GitFunctions extends BasicFunction {
 		return result;
 	}
 	
+	// exception codes 5xx
 	private ValueSequence readCollectionFromDisk (String pathToLocal, String pathToCollection) throws XPathException {
 		Path repo = getDir(pathToLocal);
 		org.exist.collections.Collection collection = getCollection(pathToCollection);
 		
 		ValueSequence result = new ValueSequence();
+		
+		Iterator<Path> contents;
 		try {
-			Iterator<Path> contents = Files.list(repo).iterator();
-			
-			while (contents.hasNext()) {
-				Path content = contents.next();
-				
-				if (Files.isDirectory(content) ) {
-					readCollectionFromDisk(pathToLocal + "/" + content, pathToCollection + "/" + content);
-				} else {
-					result.add(new StringValue(content.toString() + ": " 
-							+ content.toString().substring(-3).matches(".xml|.xsl|.css|.xql")));
-				}
-				
-			}
+			contents = Files.list(repo).iterator();
 		} catch (IOException e) {
 			throw new XPathException(new ErrorCode("exgit501", "I/O error"),
 					"I/O error reading " + pathToLocal + ": " + e.getLocalizedMessage());
 		}
+			
+		while (contents.hasNext()) {
+			Path content = contents.next();
+			
+			String name;
+			if (content.toString().contains("/")) {
+				name = content.toString().substring(content.toString().lastIndexOf('/') + 1);
+			} else {
+				name = content.toString().substring(content.toString().lastIndexOf('\\') + 1);
+			}
+			
+			if (name.startsWith(".")) continue;
+			
+			if (Files.isDirectory(content) ) {
+				result.addAll(readCollectionFromDisk(content.toString(), pathToCollection + "/" + name));
+			} else {
+				// TODO ggf. filter übergeben lassen?
+				if (content.toString().substring(content.toString().length() - 4).matches(".xml|.xsl|.css|.xql")) {
+					Txn transaction;
+					try {
+						transaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
+					} catch (EXistException e) {
+						throw new XPathException(new ErrorCode("exgit511", "Transaction error"),
+								"Error creating transaction to store in " + pathToCollection + ": "
+										+ e.getLocalizedMessage());
+					}
+					
+					String data;
+					try {
+						data = Files.readAllBytes(content).toString();
+					} catch (IOException e) {
+						throw new XPathException(new ErrorCode("exgit521", "I/O error"),
+								"I/O error reading " + content.toString() + ": " + e.getLocalizedMessage());
+					}
+					
+					IndexInfo info;
+					try {
+						info = collection.validateXMLResource(transaction, context.getBroker(),
+								XmldbURI.create(pathToCollection + "/" + name),
+								data);
+					} catch (EXistException | PermissionDeniedException | SAXException | LockException
+							| IOException e) {
+						throw new XPathException(new ErrorCode("exgit522", "validation error"),
+								"validation error for file " + content.toString() + ": " + e.getLocalizedMessage());
+					}
+					
+					try {
+						collection.store(transaction, context.getBroker(), info, data);
+					} catch (EXistException | PermissionDeniedException | SAXException | LockException e) {
+						throw new XPathException(new ErrorCode("exgit523", "store error"),
+								"Error storing " + content.toString() + " into " + pathToCollection + ": "
+										+ e.getLocalizedMessage());
+					}
+					
+					try {
+						transaction.commit();
+					} catch (TransactionException e) {
+						throw new XPathException(new ErrorCode("exgit512", "transaction error"),
+								"error committing transaction " + transaction.getId() + " for " + contents.toString()
+								+ " into " + pathToCollection + ": " + e.getLocalizedMessage());
+					} finally {
+						transaction.close();
+					}
+					
+					result.add(new StringValue(content.toString() + " -> " + pathToCollection));
+				}
+			}
+			
+		}
+		
 		
 		// TODO prüfen ob wohlgeformt
 		// TODO nicht binaries
