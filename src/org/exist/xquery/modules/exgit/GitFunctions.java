@@ -311,6 +311,7 @@ public class GitFunctions extends BasicFunction {
 								+ " into " + pathToCollection + ": " + e.getLocalizedMessage());
 					} finally {
 						transaction.close();
+						collection.getLock().release(LockMode.WRITE_LOCK);
 					}
 					
 					result.add(new StringValue(content.toString() + " -> " + pathToCollection));
