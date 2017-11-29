@@ -74,16 +74,12 @@ public class GitFunctions extends BasicFunction {
 									"The remote password.") },
 					new FunctionReturnSequenceType(Type.STRING, Cardinality.MANY, "the reply.")),
 			new FunctionSignature(new QName("sync", Exgit.NAMESPACE_URI, Exgit.PREFIX),
-					"Synchronize a collection with a directory hierarchy. Compares last modified time stamps. "
-							+ "If $dateTime is given, only resources modified after this time stamp are taken into account. "
-							+ "This method is only available to the DBA role.",
+					"Write $collection to $repoDir.",
 					new SequenceType[] {
 							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The full path to the local git repository"),
 							new FunctionParameterSequenceType("collection", Type.STRING, Cardinality.EXACTLY_ONE,
-									"The collection to sync.")/*,
-							new FunctionParameterSequenceType("dateTime", Type.DATE_TIME, Cardinality.ZERO_OR_ONE,
-									"Optional: only resources modified after the given date/time will be synchronized.")*/ },
+									"The collection to sync.")},
 					new FunctionReturnSequenceType(Type.BOOLEAN, Cardinality.EXACTLY_ONE,
 							"true if successful, false otherwise")),
 			new FunctionSignature(new QName("pull", Exgit.NAMESPACE_URI, Exgit.PREFIX), "Execute git pull.",
@@ -96,7 +92,16 @@ public class GitFunctions extends BasicFunction {
 									"The user for authentication."),
 							new FunctionParameterSequenceType("password", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The remote password.") },
-					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE, "the reply."))
+					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE, "the reply.")),
+			new FunctionSignature(new QName("import", Exgit.NAMESPACE_URI, Exgit.PREFIX),
+					"Import the contents of $repoDir into $collection. Binary files will be ignored.",
+					new SequenceType[] {
+							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The full path to the local git repository"),
+							new FunctionParameterSequenceType("collection", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The collection to sync.")},
+					new FunctionReturnSequenceType(Type.BOOLEAN, Cardinality.EXACTLY_ONE,
+							"true if successful, false otherwise"))
 			};
 
 	public GitFunctions(XQueryContext context, FunctionSignature signature) {
@@ -190,7 +195,7 @@ public class GitFunctions extends BasicFunction {
 		}
 			break;
 		case "sync":
-			result.add(new BooleanValue(syncCollection(args[0].toString(), args[1].toString())));
+			result.add(new BooleanValue(writeCollectionToDisk(args[0].toString(), args[1].toString())));
 			break;
 		case "pull":
 		{
@@ -215,7 +220,8 @@ public class GitFunctions extends BasicFunction {
 		}
 		break;
 		case "import":
-			// TODO vorher prüfen, ob wohlgeformt
+			result.addAll(readCollectionFromDisk(args[0].toString(), args[1].toString()));
+			break;
 		default:
 			throw new XPathException(new ErrorCode("exgit000", "function not found"),
 					"The requested function " + functionName + " was not found in this module");
@@ -224,8 +230,37 @@ public class GitFunctions extends BasicFunction {
 		return result;
 	}
 	
+	private ValueSequence readCollectionFromDisk (String pathToLocal, String pathToCollection) throws XPathException {
+		Path repo = getDir(pathToLocal);
+		org.exist.collections.Collection collection = getCollection(pathToCollection);
+		
+		ValueSequence result = new ValueSequence();
+		try {
+			Iterator<Path> contents = Files.list(repo).iterator();
+			
+			while (contents.hasNext()) {
+				Path content = contents.next();
+				
+				if (Files.isDirectory(content) ) {
+					readCollectionFromDisk(pathToLocal + "/" + content, pathToCollection + "/" + content);
+				} else {
+					result.add(new StringValue(content.toString() + ": " 
+							+ content.toString().substring(-3).matches(".xml|.xsl|.css|.xql")));
+				}
+				
+			}
+		} catch (IOException e) {
+			throw new XPathException(new ErrorCode("exgit501", "I/O error"),
+					"I/O error reading " + pathToLocal + ": " + e.getLocalizedMessage());
+		}
+		
+		// TODO prüfen ob wohlgeformt
+		// TODO nicht binaries
+		return result;
+	}
+	
 	/* error codes 2xy */
-	private boolean syncCollection(String pathToLocal, String pathToCollection) throws XPathException {
+	private boolean writeCollectionToDisk(String pathToLocal, String pathToCollection) throws XPathException {
 		Path repo = getDir(pathToLocal);
 		org.exist.collections.Collection collection = getCollection(pathToCollection);
 		
@@ -281,7 +316,7 @@ public class GitFunctions extends BasicFunction {
 		while (subcollections.hasNext()) {
 			XmldbURI coll = subcollections.next();
 			
-			syncCollection(repo.toString() + "/" + coll.toString(),
+			writeCollectionToDisk(repo.toString() + "/" + coll.toString(),
 					pathToCollection + "/" + coll.toString());
 		}
 		
