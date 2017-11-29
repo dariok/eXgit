@@ -49,7 +49,7 @@ public class GitFunctions extends BasicFunction {
 									"The full path to the local git repository"),
 							new FunctionParameterSequenceType("message", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The commit message.") },
-					new FunctionReturnSequenceType(Type.DOUBLE, Cardinality.EXACTLY_ONE, "the commit hash.")),
+					new FunctionReturnSequenceType(Type.STRING, Cardinality.MANY, "the commit hash.")),
 			new FunctionSignature(new QName("commit", Exgit.NAMESPACE_URI, Exgit.PREFIX), "Execute a git commit.",
 					new SequenceType[] {
 							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
@@ -60,7 +60,7 @@ public class GitFunctions extends BasicFunction {
 									"The name to set as author."),
 							new FunctionParameterSequenceType("authorMail", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The eMail to set for the author.")},
-					new FunctionReturnSequenceType(Type.DOUBLE, Cardinality.EXACTLY_ONE, "the commit hash.")),
+					new FunctionReturnSequenceType(Type.STRING, Cardinality.MANY, "the commit hash.")),
 			new FunctionSignature(new QName("push", Exgit.NAMESPACE_URI, Exgit.PREFIX), "Execute git push.",
 					new SequenceType[] {
 							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
@@ -71,7 +71,7 @@ public class GitFunctions extends BasicFunction {
 									"The user for authentication."),
 							new FunctionParameterSequenceType("password", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The remote password.") },
-					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE, "the reply.")),
+					new FunctionReturnSequenceType(Type.STRING, Cardinality.MANY, "the reply.")),
 			new FunctionSignature(new QName("sync", Exgit.NAMESPACE_URI, Exgit.PREFIX),
 					"Synchronize a collection with a directory hierarchy. Compares last modified time stamps. "
 							+ "If $dateTime is given, only resources modified after this time stamp are taken into account. "
@@ -84,7 +84,19 @@ public class GitFunctions extends BasicFunction {
 							new FunctionParameterSequenceType("dateTime", Type.DATE_TIME, Cardinality.ZERO_OR_ONE,
 									"Optional: only resources modified after the given date/time will be synchronized.")*/ },
 					new FunctionReturnSequenceType(Type.BOOLEAN, Cardinality.EXACTLY_ONE,
-							"true if successful, false otherwise")) };
+							"true if successful, false otherwise")),
+			new FunctionSignature(new QName("pull", Exgit.NAMESPACE_URI, Exgit.PREFIX), "Execute git pull.",
+					new SequenceType[] {
+							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The full path to the local git repository"),
+							new FunctionParameterSequenceType("remote", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The remote."),
+							new FunctionParameterSequenceType("username", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The user for authentication."),
+							new FunctionParameterSequenceType("password", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The remote password.") },
+					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE, "the reply."))
+			};
 
 	public GitFunctions(XQueryContext context, FunctionSignature signature) {
 		super(context, signature);
@@ -146,7 +158,8 @@ public class GitFunctions extends BasicFunction {
 			
 			break;
 		case "push":
-			String remotes = args[1].toString();
+		{
+			String remote = args[1].toString();
 			String username = args[2].toString();
 			String password = args[3].toString();
 			
@@ -154,11 +167,11 @@ public class GitFunctions extends BasicFunction {
 			
 			Iterable<PushResult> p;
 			try {
-				p = git.push().setRemote(remotes)
+				p = git.push().setRemote(remote)
 						.setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, password)).call();
 			} catch (GitAPIException e) {
 				throw new XPathException(new ErrorCode("exgit311", "Git API error on push"),
-						"Error pushing to remote '" + remotes + "': " + e.toString());
+						"Error pushing to remote '" + remote + "': " + e.toString());
 			} finally {
 				git.close();
 			}
@@ -175,11 +188,28 @@ public class GitFunctions extends BasicFunction {
 			}
 			
 			break;
+		}
 		case "sync":
 			result.add(new BooleanValue(syncCollection(args[0].toString(), args[1].toString())));
 			break;
 		case "pull":
-			// TODO ggf. high level functionen anbieten
+		{
+			String remote = args[1].toString();
+			String username = args[2].toString();
+			String password = args[3].toString();
+			
+			git = getRepo(args[0].toString());
+			
+			try {
+				git.pull().setRemote(remote).setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, password)).call();
+			} catch (GitAPIException e) {
+				throw new XPathException(new ErrorCode("exgit401", "pull error"),
+						"One of several possible errors has occurred pulling " + args[0].toString() + ": "
+							+ e.getLocalizedMessage());
+			} finally {
+				git.close();
+			}
+		}
 		case "import":
 			// TODO vorher prüfen, ob wohlgeformt
 		default:
@@ -202,7 +232,8 @@ public class GitFunctions extends BasicFunction {
 			subcollections = collection.collectionIterator(context.getBroker());
 		} catch (PermissionDeniedException e) {
 			throw new XPathException(new ErrorCode("exgit201", "permission denied"),
-					"Access to the requested collection's contents was denied.");
+					"Access to the requested contents of collection " + collection.getURI().toString()
+					+ " was denied.");
 		} catch (LockException e) {
 			throw new XPathException(new ErrorCode("exgit202", "locking error"),
 					"Failed to obtain a lock on " + collection.getURI().toString() + ".");
@@ -219,7 +250,7 @@ public class GitFunctions extends BasicFunction {
 				writer = new OutputStreamWriter(Files.newOutputStream(filePath), "UTF-8");
 			} catch (UnsupportedEncodingException e) {
 				throw new XPathException(new ErrorCode("exgit211", "unknown encoding"),
-						"The JRE does not know UTF-8; sth very strange is going on.");
+						"The JRE does not know UTF-8; sth. very strange is going on.");
 			} catch (IOException e) {
 				throw new XPathException(new ErrorCode("exgit212", "I/O error"),
 						"Cannot write to " + filePath.toString() + ".");
@@ -298,51 +329,24 @@ public class GitFunctions extends BasicFunction {
 	/* exception codes 10x */
 	private Path getDir (String pathToLocal) throws XPathException {
 		Path repo = Paths.get(pathToLocal);
-		
+
 		if (Files.exists(repo) && !Files.isDirectory(repo))
 				throw new XPathException(new ErrorCode("exgit101", "no such directory"),
-						"The requested local repository was not found under the given path " + repo.toString() + ".");
+						"The requested local repository was not found under the given path "
+								+ repo.toAbsolutePath().toString() + ".");
 		if (Files.exists(repo) && !Files.isWritable(repo))
 			throw new XPathException(new ErrorCode("exgit102", "not writable"),
-					"The requested local repository " + repo.toString() + " is not writable");
+					"The requested local repository " + repo.toAbsolutePath().toString() + " is not writable");
 		
 		if (!Files.exists(repo)) {
 			try {
 				Files.createDirectory(repo);
 			} catch (IOException e) {
 				throw new XPathException(new ErrorCode("exgit103", "cannot create directory"),
-						"The requested local directory " + repo.toString() + " could not be created");
+						"The requested local directory " + repo.toAbsolutePath().toString() + " could not be created");
 			}
 		}
 		
 		return repo;
 	}
-
-	/*
-	private Sequence list(String collection) throws XPathException {
-		ValueSequence result = new ValueSequence();
-		Collection col;
-
-		try {
-			col = DatabaseManager.getCollection(URI + collection);
-		} catch (Exception e2) {
-			throw new XPathException(new ErrorCode("exgit02", "Error getting coll.: " + e2.toString()), e2.toString());
-		}
-
-		// now we have a list of all the documents in our given collection
-		try {
-			for (String file : col.listResources()) {
-				result.add(new StringValue(collection + '/' + file));
-			}
-			for (String coll : col.listChildCollections()) {
-				result.add(new StringValue("Collection: " + collection + '/' + coll));
-				result.addAll(list(collection + '/' + coll));
-			}
-			// result.add(new StringValue(col.listResources()));
-		} catch (XMLDBException e) {
-			throw new XPathException(new ErrorCode("exgit03", e.toString()), e.toString());
-		}
-
-		return result;
-	}*/
 }
