@@ -1,22 +1,27 @@
 package org.exist.xquery.modules.exgit;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collection;
 import java.util.Iterator;
 
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.PushResult;
+import org.eclipse.jgit.transport.RemoteRefUpdate;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.exist.dom.QName;
 import org.exist.dom.persistent.DocumentImpl;
@@ -34,6 +39,7 @@ import org.exist.xquery.XQueryContext;
 import org.exist.xquery.value.BooleanValue;
 import org.exist.xquery.value.FunctionParameterSequenceType;
 import org.exist.xquery.value.FunctionReturnSequenceType;
+import org.exist.xquery.value.OrderedValueSequence;
 import org.exist.xquery.value.Sequence;
 import org.exist.xquery.value.SequenceType;
 import org.exist.xquery.value.StringValue;
@@ -109,6 +115,8 @@ public class GitFunctions extends BasicFunction {
 			
 			git = getRepo(args[0].toString());
 			
+			String add;	// added files
+			String del; // deleted files
 			String chg;	// changed files
 			String mod;	// modified files
 			RevCommit c;
@@ -116,8 +124,12 @@ public class GitFunctions extends BasicFunction {
 				Status stat = git.status().call();
 				chg = stat.getChanged().toString();
 				mod = stat.getModified().toString();
-				git.add().addFilepattern(".").call();
+				add = stat.getAdded().toString();
+				del = stat.getRemoved().toString();
+				//git.add().addFilepattern(".").call();
+				//git.rm().addFilepattern(".").call();
 				
+				// TODO add .setAll(true)
 				if (args.length == 2) {
 					c = git.commit().setMessage(message).call();
 				} else {
@@ -133,6 +145,8 @@ public class GitFunctions extends BasicFunction {
 			result.add(new StringValue("Path to local repo: " + args[0].toString()));
 			result.add(new StringValue("Changed: " + chg));
 			result.add(new StringValue("Modified: " + mod));
+			result.add(new StringValue("Added: " + add));
+			result.add(new StringValue("removed: " + del));
 			result.add(new StringValue("Revision: " + c.getId().toString()));
 			result.add(new StringValue("Author: " + c.getAuthorIdent().toString()));
 			
@@ -150,12 +164,31 @@ public class GitFunctions extends BasicFunction {
 						.setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, password)).call();
 			} catch (GitAPIException e) {
 				throw new XPathException(new ErrorCode("exgit311", "Git API error on push"),
-						"Error pushing to remote repo at " + remotes + ": " + e.toString());
+						"Error pushing to remote '" + remotes + "': " + e.toString());
 			} finally {
 				git.close();
 			}
 			
-			result.add(new StringValue(p.iterator().next().getMessages()));
+			try {
+				PrintWriter stat = new PrintWriter(args[0].toString() + "/push.log");
+				
+				Iterator<PushResult> pi = p.iterator();
+				while (pi.hasNext()) {
+					PushResult o = pi.next();
+					
+					result.add(new StringValue(o.getRemoteUpdates().toString()));
+					result.add(new StringValue(o.getMessages().toString()));
+					
+					// TODO ggf. getRemoteUpdates().iterator().next() -> einzelne teile des Status
+				}
+				
+				stat.flush();
+				stat.close();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
 			break;
 		case "sync":
 			result.add(new BooleanValue(syncCollection(args[0].toString(), args[1].toString())));
