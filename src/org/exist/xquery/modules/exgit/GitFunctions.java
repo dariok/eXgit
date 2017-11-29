@@ -1,6 +1,7 @@
 package org.exist.xquery.modules.exgit;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.UnsupportedEncodingException;
@@ -20,7 +21,9 @@ import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.PushResult;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.exist.EXistException;
+import org.exist.collections.Collection;
 import org.exist.collections.IndexInfo;
+import org.exist.collections.triggers.TriggerException;
 import org.exist.dom.QName;
 import org.exist.dom.persistent.DocumentImpl;
 import org.exist.security.PermissionDeniedException;
@@ -45,6 +48,7 @@ import org.exist.xquery.value.SequenceType;
 import org.exist.xquery.value.StringValue;
 import org.exist.xquery.value.Type;
 import org.exist.xquery.value.ValueSequence;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 public class GitFunctions extends BasicFunction {
@@ -238,7 +242,21 @@ public class GitFunctions extends BasicFunction {
 	// exception codes 5xx
 	private ValueSequence readCollectionFromDisk (String pathToLocal, String pathToCollection) throws XPathException {
 		Path repo = getDir(pathToLocal);
-		org.exist.collections.Collection collection = getCollection(pathToCollection);
+		
+		//org.exist.collections.Collection collection = getCollection(pathToCollection);
+		Txn collTransaction;
+		Collection collection;
+		try {
+			collTransaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
+			collection = context.getBroker().getOrCreateCollection(collTransaction,
+					XmldbURI.create(pathToCollection));
+			collTransaction.commit();
+			collTransaction.close();
+		} catch (EXistException | TriggerException | PermissionDeniedException | IOException e1) {
+			throw new XPathException(new ErrorCode("exgit500", "collection not found"),
+					"Could not find nor creater " + pathToCollection + ": " + e1.getLocalizedMessage());
+		}
+		
 		
 		ValueSequence result = new ValueSequence();
 		
@@ -276,12 +294,19 @@ public class GitFunctions extends BasicFunction {
 										+ e.getLocalizedMessage());
 					}
 					
-					String data;
+					InputSource data;
+					FileInputStream fis;
 					try {
-						data = Files.readAllBytes(content).toString();
+						fis = new FileInputStream(content.toFile());
+						data = new InputSource(fis);
 					} catch (IOException e) {
 						throw new XPathException(new ErrorCode("exgit521", "I/O error"),
 								"I/O error reading " + content.toString() + ": " + e.getLocalizedMessage());
+					} finally {
+						transaction.abort();
+						transaction.close();
+						collection.getLock().release(LockMode.READ_LOCK);
+						
 					}
 					
 					IndexInfo info;
@@ -291,16 +316,37 @@ public class GitFunctions extends BasicFunction {
 								data);
 					} catch (EXistException | PermissionDeniedException | SAXException | LockException
 							| IOException e) {
-						throw new XPathException(new ErrorCode("exgit522", "validation error"),
-								"validation error for file " + content.toString() + ": " + e.getLocalizedMessage());
+						/*throw new XPathException(new ErrorCode("exgit522", "validation error"),
+								"validation error for file " + content.toString() + ": " + e.getLocalizedMessage());*/
+						result.add(new StringValue(content.toString() + ": validation error " + e.getLocalizedMessage()));
+						continue;
+					} finally {
+						transaction.abort();
+						transaction.close();
+						collection.getLock().release(LockMode.READ_LOCK);
 					}
 					
 					try {
-						collection.store(transaction, context.getBroker(), info, data);
-					} catch (EXistException | PermissionDeniedException | SAXException | LockException e) {
-						throw new XPathException(new ErrorCode("exgit523", "store error"),
+						if (content.toString().substring(content.toString().length() - 4).matches(".xml|.xsl") ) {
+							collection.store(transaction, context.getBroker(), info, data);
+						} else {
+							collection.addBinaryResource(transaction, context.getBroker(), 
+									XmldbURI.create(pathToCollection + "/" + name),
+									fis,
+									"application/XQuery",
+									(long) data.toString().length());
+						}
+					} catch (EXistException | PermissionDeniedException | SAXException | LockException
+							| IOException e) {
+						/*throw new XPathException(new ErrorCode("exgit523", "store error"),
 								"Error storing " + content.toString() + " into " + pathToCollection + ": "
-										+ e.getLocalizedMessage());
+										+ e.getLocalizedMessage());*/
+						result.add(new StringValue(content.toString() + ": storage error " + e.getLocalizedMessage()));
+						continue;
+					} finally {
+						transaction.abort();
+						transaction.close();
+						collection.getLock().release(LockMode.READ_LOCK);
 					}
 					
 					try {
@@ -310,8 +356,10 @@ public class GitFunctions extends BasicFunction {
 								"error committing transaction " + transaction.getId() + " for " + contents.toString()
 								+ " into " + pathToCollection + ": " + e.getLocalizedMessage());
 					} finally {
+						transaction.abort();
 						transaction.close();
 						collection.getLock().release(LockMode.WRITE_LOCK);
+						collection.getLock().release(LockMode.READ_LOCK);
 					}
 					
 					result.add(new StringValue(content.toString() + " -> " + pathToCollection));
