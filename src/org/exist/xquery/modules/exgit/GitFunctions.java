@@ -1,27 +1,22 @@
 package org.exist.xquery.modules.exgit;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collection;
 import java.util.Iterator;
 
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.PushResult;
-import org.eclipse.jgit.transport.RemoteRefUpdate;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.exist.dom.QName;
 import org.exist.dom.persistent.DocumentImpl;
@@ -39,7 +34,6 @@ import org.exist.xquery.XQueryContext;
 import org.exist.xquery.value.BooleanValue;
 import org.exist.xquery.value.FunctionParameterSequenceType;
 import org.exist.xquery.value.FunctionReturnSequenceType;
-import org.exist.xquery.value.OrderedValueSequence;
 import org.exist.xquery.value.Sequence;
 import org.exist.xquery.value.SequenceType;
 import org.exist.xquery.value.StringValue;
@@ -169,24 +163,15 @@ public class GitFunctions extends BasicFunction {
 				git.close();
 			}
 			
-			try {
-				PrintWriter stat = new PrintWriter(args[0].toString() + "/push.log");
+			
+			Iterator<PushResult> pi = p.iterator();
+			while (pi.hasNext()) {
+				PushResult o = pi.next();
 				
-				Iterator<PushResult> pi = p.iterator();
-				while (pi.hasNext()) {
-					PushResult o = pi.next();
-					
-					result.add(new StringValue(o.getRemoteUpdates().toString()));
-					result.add(new StringValue(o.getMessages().toString()));
-					
-					// TODO ggf. getRemoteUpdates().iterator().next() -> einzelne teile des Status
-				}
+				result.add(new StringValue(o.getRemoteUpdates().toString()));
+				result.add(new StringValue(o.getMessages().toString()));
 				
-				stat.flush();
-				stat.close();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				// TODO ggf. getRemoteUpdates().iterator().next() -> einzelne teile des Status
 			}
 			
 			break;
