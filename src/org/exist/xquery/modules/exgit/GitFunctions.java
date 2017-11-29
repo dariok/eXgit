@@ -11,6 +11,7 @@ import java.nio.file.Paths;
 import java.util.Iterator;
 
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.lib.Repository;
@@ -186,9 +187,8 @@ public class GitFunctions extends BasicFunction {
 				
 				// TODO ggf. getRemoteUpdates().iterator().next() -> einzelne teile des Status
 			}
-			
-			break;
 		}
+			break;
 		case "sync":
 			result.add(new BooleanValue(syncCollection(args[0].toString(), args[1].toString())));
 			break;
@@ -200,8 +200,9 @@ public class GitFunctions extends BasicFunction {
 			
 			git = getRepo(args[0].toString());
 			
+			PullResult p;
 			try {
-				git.pull().setRemote(remote).setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, password)).call();
+				p = git.pull().setRemote(remote).setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, password)).call();
 			} catch (GitAPIException e) {
 				throw new XPathException(new ErrorCode("exgit401", "pull error"),
 						"One of several possible errors has occurred pulling " + args[0].toString() + ": "
@@ -209,7 +210,10 @@ public class GitFunctions extends BasicFunction {
 			} finally {
 				git.close();
 			}
+			
+			result.add(new StringValue(p.toString()));
 		}
+		break;
 		case "import":
 			// TODO vorher prüfen, ob wohlgeformt
 		default:
