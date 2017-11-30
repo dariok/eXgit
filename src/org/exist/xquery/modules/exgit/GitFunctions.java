@@ -245,16 +245,21 @@ public class GitFunctions extends BasicFunction {
 		
 		//org.exist.collections.Collection collection = getCollection(pathToCollection);
 		Txn collTransaction;
+		XmldbURI uri = XmldbURI.create(pathToCollection);
 		Collection collection;
 		try {
-			collTransaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
-			collection = context.getBroker().getOrCreateCollection(collTransaction,
-					XmldbURI.create(pathToCollection));
-			collTransaction.commit();
-			collTransaction.close();
+			collection = context.getBroker().getCollection(uri);
+			if (collection == null) {
+				collTransaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
+				collection = context.getBroker().getOrCreateCollection(collTransaction,
+						XmldbURI.create(pathToCollection));
+				collTransaction.commit();
+				collTransaction.close();
+				collection.release(LockMode.WRITE_LOCK);
+			}
 		} catch (EXistException | TriggerException | PermissionDeniedException | IOException e1) {
 			throw new XPathException(new ErrorCode("exgit500", "collection not found"),
-					"Could not find nor creater " + pathToCollection + ": " + e1.getLocalizedMessage());
+					"Could not find nor create " + pathToCollection + ": " + e1.getLocalizedMessage());
 		}
 		
 		
@@ -311,8 +316,9 @@ public class GitFunctions extends BasicFunction {
 					
 					IndexInfo info;
 					try {
+						//result.add(new StringValue(pathToCollection + "/|" + name));
 						info = collection.validateXMLResource(transaction, context.getBroker(),
-								XmldbURI.create(pathToCollection + "/" + name),
+								XmldbURI.create(name),
 								data);
 					} catch (EXistException | PermissionDeniedException | SAXException | LockException
 							| IOException e) {
@@ -320,18 +326,18 @@ public class GitFunctions extends BasicFunction {
 								"validation error for file " + content.toString() + ": " + e.getLocalizedMessage());*/
 						result.add(new StringValue(content.toString() + ": validation error " + e.getLocalizedMessage()));
 						continue;
-					} finally {
+					}  finally {
 						transaction.abort();
 						transaction.close();
 						collection.getLock().release(LockMode.READ_LOCK);
 					}
 					
 					try {
-						if (content.toString().substring(content.toString().length() - 4).matches(".xml|.xsl") ) {
+						if (name.substring(name.length() - 4).matches(".xml|.xsl") ) {
 							collection.store(transaction, context.getBroker(), info, data);
 						} else {
 							collection.addBinaryResource(transaction, context.getBroker(), 
-									XmldbURI.create(pathToCollection + "/" + name),
+									XmldbURI.create(name),
 									fis,
 									"application/XQuery",
 									(long) data.toString().length());
