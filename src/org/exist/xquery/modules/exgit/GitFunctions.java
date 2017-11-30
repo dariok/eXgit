@@ -148,14 +148,11 @@ public class GitFunctions extends BasicFunction {
 				mod = stat.getModified().toString();
 				add = stat.getAdded().toString();
 				del = stat.getRemoved().toString();
-				//git.add().addFilepattern(".").call();
-				//git.rm().addFilepattern(".").call();
 				
-				// TODO add .setAll(true)
 				if (args.length == 2) {
-					c = git.commit().setMessage(message).call();
+					c = git.commit().setAll(true).setMessage(message).call();
 				} else {
-					c = git.commit().setMessage(message).setAuthor(args[2].toString(), args[3].toString()).call();
+					c = git.commit().setAll(true).setMessage(message).setAuthor(args[2].toString(), args[3].toString()).call();
 				}
 			} catch (GitAPIException e) {
 				throw new XPathException(new ErrorCode("exgit301", "Git API Error on commit"),
