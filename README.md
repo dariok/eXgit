@@ -3,13 +3,15 @@ JGit-based plugin for eXist-DB
 
 provides XQuery access to git
 
-## build from Source
+Currently, this is in an early beta state. **Use at your own risk!** Especially, test on a non-productive system before anything else. Please report all issues you may find.
+
+## Build from Source
 
 1. clone the Repo
 2. cd into repo's rootdirectory
 3. run `mvn package`
 
-## install
+## Install
 The packaged version includes all third-party JARs necessary to run eXgit. By using it you agree to the licenses under which these software packages are published;
 all licenses can be found in `THIRD-PARTY.TXT`.
 
@@ -22,7 +24,7 @@ Within `exist/xquery/builtin-modules` add:
     
 `target/exgit-0.1.jar` does not contain any dependencies; you are responsible to provide all dependencies for the module to work.
 
-## usage
+## Usage
 The very first step is to import the module:
 
     import module namespace exgit="http://exist-db.org/xquery/exgit" at "java:org.exist.xquery.module.exgit.Exgit";
@@ -40,7 +42,7 @@ Currently, the following functions are available:
 1. `exgit:pull($repoDir, $remote, $username, $password)` – pull from `$remote` (e.g. 'origin') supplying your user credentials
 1. `exgit:import($repoDir, $collection)` – read XML, CSS, XQuery and JS from the repo and store them in the given collection
 
-### example script - to run in eXide
+### Example script - to run in eXide
 
 ```XQuery
 xquery version "3.1";
