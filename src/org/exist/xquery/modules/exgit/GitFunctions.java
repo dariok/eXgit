@@ -254,6 +254,7 @@ public class GitFunctions extends BasicFunction {
 				collTransaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
 				collection = context.getBroker().getOrCreateCollection(collTransaction,
 						XmldbURI.create(pathToCollection));
+				context.getBroker().saveCollection(collTransaction, collection);
 				collTransaction.commit();
 				collTransaction.close();
 				collection.release(LockMode.WRITE_LOCK);
@@ -290,7 +291,7 @@ public class GitFunctions extends BasicFunction {
 				result.addAll(readCollectionFromDisk(content.toString(), pathToCollection + "/" + name));
 			} else {
 				// TODO ggf. filter übergeben lassen?
-				if (content.toString().substring(content.toString().length() - 4).matches(".xml|.xsl|.css|.xql")) {
+				if (content.toString().substring(content.toString().length() - 4).matches(".xml|.xsl|.css|.xql|.xqm|.js")) {
 					Txn transaction;
 					try {
 						transaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
@@ -302,9 +303,11 @@ public class GitFunctions extends BasicFunction {
 					
 					InputSource data;
 					FileInputStream fis;
+					String daten;
 					try {
 						fis = new FileInputStream(content.toFile());
 						data = new InputSource(fis);
+						daten = new String (Files.readAllBytes(content));
 					} catch (IOException e) {
 						throw new XPathException(new ErrorCode("exgit521", "I/O error"),
 								"I/O error reading " + content.toString() + ": " + e.getLocalizedMessage());
@@ -322,24 +325,23 @@ public class GitFunctions extends BasicFunction {
 							try {
 								info = collection.validateXMLResource(transaction, context.getBroker(),
 										XmldbURI.create(name),
-										data);
+										//data);
+										daten);
 							} catch (EXistException | PermissionDeniedException | SAXException | LockException
 									| IOException e) {
 								throw new XPathException(new ErrorCode("exgit522a", "XML validation error"),
 										"validation error for file " + content.toString() + ": " + e.getLocalizedMessage()
 										+ data.getSystemId() + " \\ " + data.hashCode());
-	//							result.add(new StringValue(content.toString() + ": validation error " + e.getLocalizedMessage()));
-	//							continue;
 							}
 							
 							try {
-								collection.store(transaction, context.getBroker(), info, data);
+								collection.store(transaction, context.getBroker(), info, 
+										//data);
+										daten);
 							} catch (EXistException | PermissionDeniedException | SAXException | LockException e) {
-								/*throw new XPathException(new ErrorCode("exgit523", "store error"),
+								throw new XPathException(new ErrorCode("exgit523a", "store error"),
 										"Error storing " + content.toString() + " into " + pathToCollection + ": "
-												+ e.getLocalizedMessage());*/
-								result.add(new StringValue(content.toString() + ": storage error " + e.getLocalizedMessage()));
-								continue;
+												+ e.getLocalizedMessage());
 							}
 						} else {
 							BinaryDocument bin;
@@ -348,56 +350,49 @@ public class GitFunctions extends BasicFunction {
 								bin = collection.validateBinaryResource(transaction, context.getBroker(), XmldbURI.create(name));
 							} catch (PermissionDeniedException | SAXException | LockException
 									| IOException e) {
-								throw new XPathException(new ErrorCode("exgit522", "validation error"),
+								throw new XPathException(new ErrorCode("exgit522b", "validation error"),
 										"validation error for file " + content.toString() + ": " + e.getLocalizedMessage()
 										+ data.getSystemId() + " \\ " + data.hashCode());
-	//							result.add(new StringValue(content.toString() + ": validation error " + e.getLocalizedMessage()));
-	//							continue;
 							}
+							
+							String mime;
+							if (name.endsWith(".css")) mime = "text/css";
+							else if (name.endsWith(".js")) mime = "application/javascript";
+							else  mime = "application/xquery";
 							
 							try {
 								collection.addBinaryResource(transaction, context.getBroker(), 
 										XmldbURI.create(name),
 										fis,
-										bin.getMetadata().getMimeType(),
+										mime,
 										bin.getContentLength());
 							} catch (EXistException | PermissionDeniedException | SAXException | LockException
 									| IOException e) {
-								/*throw new XPathException(new ErrorCode("exgit523", "store error"),
+								throw new XPathException(new ErrorCode("exgit523b", "store error"),
 										"Error storing " + content.toString() + " into " + pathToCollection + ": "
-												+ e.getLocalizedMessage());*/
-								result.add(new StringValue(content.toString() + ": storage error " + e.getLocalizedMessage()));
-								continue;
+												+ e.getLocalizedMessage());
 							}
 						}
+						
+						result.add(new StringValue(content.toString() + " -> " + pathToCollection));
 					} finally {
-						transaction.abort();
-						transaction.close();
-						collection.getLock().release(LockMode.READ_LOCK);
+						try {
+							transaction.commit();
+						} catch (TransactionException e) {
+							throw new XPathException(new ErrorCode("exgit512", "transaction error"),
+									"error committing transaction " + transaction.getId() + " for " + contents.toString()
+									+ " into " + pathToCollection + ": " + e.getLocalizedMessage());
+						} finally {
+							transaction.abort();
+							transaction.close();
+							collection.getLock().release(LockMode.WRITE_LOCK);
+							collection.getLock().release(LockMode.READ_LOCK);
+						}
 					}
-					
-					try {
-						transaction.commit();
-					} catch (TransactionException e) {
-						throw new XPathException(new ErrorCode("exgit512", "transaction error"),
-								"error committing transaction " + transaction.getId() + " for " + contents.toString()
-								+ " into " + pathToCollection + ": " + e.getLocalizedMessage());
-					} finally {
-						transaction.abort();
-						transaction.close();
-						collection.getLock().release(LockMode.WRITE_LOCK);
-						collection.getLock().release(LockMode.READ_LOCK);
-					}
-					
-					result.add(new StringValue(content.toString() + " -> " + pathToCollection));
 				}
 			}
 			
 		}
-		
-		
-		// TODO prüfen ob wohlgeformt
-		// TODO nicht binaries
 		return result;
 	}
 	
