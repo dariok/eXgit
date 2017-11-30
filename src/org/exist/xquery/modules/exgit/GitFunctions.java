@@ -83,13 +83,13 @@ public class GitFunctions extends BasicFunction {
 							new FunctionParameterSequenceType("password", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The remote password.") },
 					new FunctionReturnSequenceType(Type.STRING, Cardinality.MANY, "the reply.")),
-			new FunctionSignature(new QName("sync", Exgit.NAMESPACE_URI, Exgit.PREFIX),
+			new FunctionSignature(new QName("export", Exgit.NAMESPACE_URI, Exgit.PREFIX),
 					"Write $collection to $repoDir.",
 					new SequenceType[] {
 							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The full path to the local git repository"),
 							new FunctionParameterSequenceType("collection", Type.STRING, Cardinality.EXACTLY_ONE,
-									"The collection to sync.")},
+									"The collection to export to disk.")},
 					new FunctionReturnSequenceType(Type.BOOLEAN, Cardinality.EXACTLY_ONE,
 							"true if successful, false otherwise")),
 			new FunctionSignature(new QName("pull", Exgit.NAMESPACE_URI, Exgit.PREFIX), "Execute git pull.",
@@ -109,7 +109,7 @@ public class GitFunctions extends BasicFunction {
 							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The full path to the local git repository"),
 							new FunctionParameterSequenceType("collection", Type.STRING, Cardinality.EXACTLY_ONE,
-									"The collection to sync.")},
+									"The collection to import from disk.")},
 					new FunctionReturnSequenceType(Type.BOOLEAN, Cardinality.EXACTLY_ONE,
 							"true if successful, false otherwise"))
 			};
@@ -201,7 +201,7 @@ public class GitFunctions extends BasicFunction {
 			}
 		}
 			break;
-		case "sync":
+		case "export":
 			result.add(new BooleanValue(writeCollectionToDisk(args[0].toString(), args[1].toString())));
 			break;
 		case "pull":
