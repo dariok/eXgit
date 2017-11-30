@@ -29,11 +29,12 @@ or upgrading the module).
 
 Currently, the following functions are available:
 
-1. `exgit:sync($repoDir, $collection, $dateTime)` –
-sync `$collection` from the database to the local git repo `$repodir`
+1. `exgit:export($repoDir, $collection)` – write `$collection` from the database to the local git repo `$repodir`
 1. `exgit:commit($repoDir, $message)` – equal to `git commit -a -m'$message'` invoked in  `$repodir`
-1. `exgit:push($repoDir, $remote, $username, $password)` –
-push to `$remote` (e.g. 'origin') supplying you user credentials
+1. `exgit:commit($repoDir, $message, $authorName, $authorMail)` – same as above, explicitly setting the author
+1. `exgit:push($repoDir, $remote, $username, $password)` – push to `$remote` (e.g. 'origin') supplying your user credentials
+1. `exgit:pull($repoDir, $remote, $username, $password)` – pull from `$remote` (e.g. 'origin') supplying your user credentials
+1. `exgit:import($repoDir, $collection)` – read XML, CSS, XQuery and JS from the repo and store them in the given collection
 
 ### example script - to run in eXide
 
@@ -43,12 +44,14 @@ import module namespace exgit="http://exist-db.org/xquery/exgit" at "java:org.ex
 
 let $repoDir := "C:\Users\user\Desktop\gittest"
 let $collection := "/db/apps/dsebaseapp/data"
-let $sync := exgit:sync($repoDir, $collection, ())
+let $export := exgit:export($repoDir, $collection)
 let $message := "changes in data"
 let $commit := exgit:commit($repoDir, $message)
 let $push := exgit:push($repoDir, "origin", "username", "password")
+let $pull := exgit:pull($repoDir, "origin", "username", "password")
+let $import := exgit:import($repoDir, $collection)
 
-return $sync
+return $import
 ```
 
 ## Caveats and future
