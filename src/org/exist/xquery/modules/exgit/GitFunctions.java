@@ -25,6 +25,7 @@ import org.exist.collections.Collection;
 import org.exist.collections.IndexInfo;
 import org.exist.collections.triggers.TriggerException;
 import org.exist.dom.QName;
+import org.exist.dom.persistent.BinaryDocument;
 import org.exist.dom.persistent.DocumentImpl;
 import org.exist.security.PermissionDeniedException;
 import org.exist.storage.BrokerPool;
@@ -314,41 +315,61 @@ public class GitFunctions extends BasicFunction {
 						
 					}
 					
-					IndexInfo info;
-					try {
-						//result.add(new StringValue(pathToCollection + "/|" + name));
-						info = collection.validateXMLResource(transaction, context.getBroker(),
-								XmldbURI.create(name),
-								data);
-					} catch (EXistException | PermissionDeniedException | SAXException | LockException
-							| IOException e) {
-						/*throw new XPathException(new ErrorCode("exgit522", "validation error"),
-								"validation error for file " + content.toString() + ": " + e.getLocalizedMessage());*/
-						result.add(new StringValue(content.toString() + ": validation error " + e.getLocalizedMessage()));
-						continue;
-					}  finally {
-						transaction.abort();
-						transaction.close();
-						collection.getLock().release(LockMode.READ_LOCK);
-					}
-					
 					try {
 						if (name.substring(name.length() - 4).matches(".xml|.xsl") ) {
-							collection.store(transaction, context.getBroker(), info, data);
+							IndexInfo info;
+						
+							try {
+								info = collection.validateXMLResource(transaction, context.getBroker(),
+										XmldbURI.create(name),
+										data);
+							} catch (EXistException | PermissionDeniedException | SAXException | LockException
+									| IOException e) {
+								throw new XPathException(new ErrorCode("exgit522a", "XML validation error"),
+										"validation error for file " + content.toString() + ": " + e.getLocalizedMessage()
+										+ data.getSystemId() + " \\ " + data.hashCode());
+	//							result.add(new StringValue(content.toString() + ": validation error " + e.getLocalizedMessage()));
+	//							continue;
+							}
+							
+							try {
+								collection.store(transaction, context.getBroker(), info, data);
+							} catch (EXistException | PermissionDeniedException | SAXException | LockException e) {
+								/*throw new XPathException(new ErrorCode("exgit523", "store error"),
+										"Error storing " + content.toString() + " into " + pathToCollection + ": "
+												+ e.getLocalizedMessage());*/
+								result.add(new StringValue(content.toString() + ": storage error " + e.getLocalizedMessage()));
+								continue;
+							}
 						} else {
-							collection.addBinaryResource(transaction, context.getBroker(), 
-									XmldbURI.create(name),
-									fis,
-									"application/XQuery",
-									(long) data.toString().length());
+							BinaryDocument bin;
+							
+							try {
+								bin = collection.validateBinaryResource(transaction, context.getBroker(), XmldbURI.create(name));
+							} catch (PermissionDeniedException | SAXException | LockException
+									| IOException e) {
+								throw new XPathException(new ErrorCode("exgit522", "validation error"),
+										"validation error for file " + content.toString() + ": " + e.getLocalizedMessage()
+										+ data.getSystemId() + " \\ " + data.hashCode());
+	//							result.add(new StringValue(content.toString() + ": validation error " + e.getLocalizedMessage()));
+	//							continue;
+							}
+							
+							try {
+								collection.addBinaryResource(transaction, context.getBroker(), 
+										XmldbURI.create(name),
+										fis,
+										bin.getMetadata().getMimeType(),
+										bin.getContentLength());
+							} catch (EXistException | PermissionDeniedException | SAXException | LockException
+									| IOException e) {
+								/*throw new XPathException(new ErrorCode("exgit523", "store error"),
+										"Error storing " + content.toString() + " into " + pathToCollection + ": "
+												+ e.getLocalizedMessage());*/
+								result.add(new StringValue(content.toString() + ": storage error " + e.getLocalizedMessage()));
+								continue;
+							}
 						}
-					} catch (EXistException | PermissionDeniedException | SAXException | LockException
-							| IOException e) {
-						/*throw new XPathException(new ErrorCode("exgit523", "store error"),
-								"Error storing " + content.toString() + " into " + pathToCollection + ": "
-										+ e.getLocalizedMessage());*/
-						result.add(new StringValue(content.toString() + ": storage error " + e.getLocalizedMessage()));
-						continue;
 					} finally {
 						transaction.abort();
 						transaction.close();
