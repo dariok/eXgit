@@ -13,14 +13,14 @@ provides XQuery access to git
 The packaged version includes all third-party JARs necessary to run eXgit. By using it you agree to the licenses under which these software packages are published;
 all licenses can be found in `THIRD-PARTY.TXT`.
 
-1. copy `target/exgit-0.1-jar-with-dependencies.jar` into your exist-db home directory `eXist-db HOME/lib/user`
-2. register eXgit module in `exist-db HOME/conf.xml`:
+1. copy `target/exgit-0.1-jar-with-dependencies.jar` into your exist-db home directory `$eXist-db HOME$/lib/user`
+2. register eXgit module in `$exist-db HOME$/conf.xml`:
 
-Within `exist/xquery/builtin-modules`:
+Within `exist/xquery/builtin-modules` add:
 
     <module uri="http://exist-db.org/xquery/exgit" class="org.exist.xquery.modules.exgit.Exgit"/>
     
-`target/exgit-0.1.jar` does not contains any dependencies; you are responsible to provide all dependencies for the module to work.
+`target/exgit-0.1.jar` does not contain any dependencies; you are responsible to provide all dependencies for the module to work.
 
 ## usage
 The very first step is to import the module:
