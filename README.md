@@ -10,6 +10,8 @@ provides XQuery access to git
 3. run `mvn package`
 
 ## install
+The packaged version includes all third-party JARs necessary to run eXgit. By using it you agree to the licenses under which these software packages are published;
+all licenses can be found in `THIRD-PARTY.TXT`.
 
 1. copy `target/exgit-0.1-jar-with-dependencies.jar` into your exist-db home directory `eXist-db HOME/lib/user`
 2. register eXgit module in `exist-db HOME/conf.xml`:
@@ -17,6 +19,8 @@ provides XQuery access to git
 Within `exist/xquery/builtin-modules`:
 
     <module uri="http://exist-db.org/xquery/exgit" class="org.exist.xquery.modules.exgit.Exgit"/>
+    
+`target/exgit-0.1.jar` does not contains any dependencies; you are responsible to provide all dependencies for the module to work.
 
 ## usage
 The very first step is to import the module:
@@ -59,3 +63,7 @@ Currently, HTTP is used as transport and the user credentials have to be supplie
 One of the next steps is to a) add SSH as a mode of transport and b) support to store credentials
 or an SSH key within the collection configuration so that sensitive information does not have to be
 included in the XQuery as plain text.
+
+## Legal Notice
+
+In the fully packed ('shaded') jar ('-with-dependencies.jar'), third party software is included.  All licenses can be found in `THIRD-PARTY.TXT`.

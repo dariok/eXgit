@@ -57,6 +57,22 @@
 					</execution>
 				</executions>
 			</plugin>
+			<plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>license-maven-plugin</artifactId>
+        <version>1.14</version>
+        <executions>
+          <execution>
+            <id>download-licenses</id>
+            <goals>
+              <goal>download-licenses</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+        	<outputDirectory>${project.build.directory}/..</outputDirectory>
+        </configuration>
+      </plugin>
 			<!-- <plugin> -->
 			<!-- <artifactId>maven-dependency-plugin</artifactId> -->
 			<!-- <version>2.10</version> -->
