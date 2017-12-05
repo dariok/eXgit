@@ -15,6 +15,7 @@ import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.dircache.DirCache;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
@@ -143,6 +144,10 @@ public class GitFunctions extends BasicFunction {
 			String mod;	// modified files
 			RevCommit c;
 			try {
+				// make sure that new files are added; cf. #4
+				@SuppressWarnings("unused")
+				DirCache addC = git.add().addFilepattern(".").call();
+				
 				Status stat = git.status().call();
 				chg = stat.getChanged().toString();
 				mod = stat.getModified().toString();
