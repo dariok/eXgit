@@ -21,7 +21,7 @@
 
 	<build>
 		<sourceDirectory>src</sourceDirectory>
-		<finalName>exgit.xar</finalName>
+		<finalName>exgit</finalName>
 		<plugins>
 			<plugin>
 				<artifactId>maven-compiler-plugin</artifactId>
@@ -91,6 +91,24 @@
 						<goals>
 							<goal>single</goal>
 						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>com.coderplus.maven.plugins</groupId>
+				<artifactId>copy-rename-maven-plugin</artifactId>
+				<version>1.0</version>
+				<executions>
+					<execution>
+						<id>rename-file</id>
+						<phase>package</phase>
+						<goals>
+							<goal>rename</goal>
+						</goals>
+						<configuration>
+							<sourceFile>${project.build.directory}/exgit.zip</sourceFile>
+							<destinationFile>exgit.xar</destinationFile>
+						</configuration>
 					</execution>
 				</executions>
 			</plugin>
