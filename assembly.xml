@@ -15,7 +15,7 @@
         <fileSet>
             <directory>${project.build.directory}</directory>
             <!--<outputDirectory>/</outputDirectory>-->
-            <outputDirectory>${file.separator}</outputDirectory>
+            <outputDirectory>${file.separator}content</outputDirectory>
             <includes>
                 <include>*-full.jar</include>
             </includes>
