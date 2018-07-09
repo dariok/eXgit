@@ -1,0 +1,4 @@
+<package xmlns="http://expath.org/ns/pkg" name="https://github.com/dariok/exgit" abbrev="eXgit" version="0.1" spec="1.0">
+    <title>XQuery based git client</title>
+    <dependency package="http://exist-db.org/apps/shared" semver-min="3.0.0"/>
+</package>
