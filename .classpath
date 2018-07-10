@@ -7,39 +7,6 @@
 			<attribute name="maven.pomderived" value="true"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="lib" path="C:/eXist-db/exist.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/exist-optional.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/antlr-2.7.7.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/caffeine-2.5.5.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/cglib-nodep-3.1.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/clj-ds-0.0.4.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/commons-codec-1.10.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/commons-collections-3.2.2.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/commons-configuration2-2.0.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/commons-io-2.5.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/commons-logging-1.2.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/commons-pool-1.6.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/gnu-crypto-2.0.1.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/j8fu-1.8.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/jackson-core-2.9.1.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/jargo-0.4.2-SNAPSHOT-7fa1d04.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/jcip-annotations-1.0.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/jline-0.9.94.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/jta-1.1.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/log4j-api-2.9.0.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/log4j-core-2.9.0.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/log4j-jul-2.9.0.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/log4j-slf4j-impl-2.9.0.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/pkg-java-fork.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/quartz-2.3.0.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/rsyntaxtextarea-2.6.1.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/slf4j-api-1.7.25.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/ws-commons-util-1.0.2.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/xmldb.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/xmlrpc-client-3.1.3.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/xmlrpc-common-3.1.3.jar"/>
-	<classpathentry kind="lib" path="C:/eXist-db/lib/core/xmlrpc-server-3.1.3.jar"/>
 	<classpathentry kind="con" path="org.eclipse.m2e.MAVEN2_CLASSPATH_CONTAINER">
 		<attributes>
 			<attribute name="maven.pomderived" value="true"/>
