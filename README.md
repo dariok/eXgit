@@ -13,7 +13,8 @@ Currently, this is in an early beta state. **Use at your own risk!** Especially,
 
 ## Install
 ### Option 1: use the xar
-If maven runs successfully, the project root should contain a file named `exgit.xar` which can deployed directly via the package managar.
+If maven runs successfully, the project root should contain a file named `exgit.xar` which can be deployed directly via the package manager.
+If this does not work, try option 2.
 
 
 ### Option 2: copy and install manually
@@ -21,12 +22,10 @@ The packaged version includes all third-party JARs necessary to run eXgit. By us
 all licenses can be found in `THIRD-PARTY.TXT`.
 
 1. copy `target/exgit-full.jar` into your exist-db home directory `$eXist-db HOME$/lib/user`
-2. register eXgit module in `$exist-db HOME$/conf.xml`:
+2. register eXgit module in `$exist-db HOME$/conf.xml`. Within `exist/xquery/builtin-modules` add:
+    `<module uri="http://exist-db.org/xquery/exgit" class="org.exist.xquery.modules.exgit.Exgit"/>`
+1. restart eXist.
 
-Within `exist/xquery/builtin-modules` add:
-
-    <module uri="http://exist-db.org/xquery/exgit" class="org.exist.xquery.modules.exgit.Exgit"/>
-    
 `target/exgit.jar` does not contain any dependencies; you are responsible to provide all dependencies for the module to work.
 
 ## Usage
