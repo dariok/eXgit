@@ -394,7 +394,7 @@ public class GitFunctions extends BasicFunction {
 					}
 					
 					try {
-						if (name.matches(".*(xml|xsl|xconf)$") ) {
+						if (name.matches(".*(xml|xsl|xconf|html)$") ) {
 							IndexInfo info;
 						
 							try {
