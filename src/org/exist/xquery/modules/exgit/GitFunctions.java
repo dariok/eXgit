@@ -9,6 +9,7 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.Iterator;
 
 import org.eclipse.jgit.api.Git;
@@ -121,6 +122,17 @@ public class GitFunctions extends BasicFunction {
 							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The full path to the local folder to clone into.")},
 					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE,
+							"The clone result.")),
+			new FunctionSignature(new QName("clone", Exgit.NAMESPACE_URI, Exgit.PREFIX),
+					"Clone $repo to $repoDir.",
+					new SequenceType[] {
+							new FunctionParameterSequenceType("repo", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The full URL for the repo to be cloned."),
+							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The full path to the local folder to clone into."),
+							new FunctionParameterSequenceType("branch", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The branch to clone (e.g. 'refs/heads/development').")},
+					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE,
 							"The clone result."))
 			};
 
@@ -147,7 +159,11 @@ public class GitFunctions extends BasicFunction {
 			String local = args[1].toString();
 			
 			try {
-				git = Git.cloneRepository().setURI(repo).setDirectory(new File(local)).call();
+				if (args.length == 2) {
+					git = Git.cloneRepository().setURI(repo).setDirectory(new File(local)).call();
+				} else {
+					git = Git.cloneRepository().setURI(repo).setDirectory(new File(local)).setBranchesToClone(Collections.singleton(args[2].toString())).setBranch(args[2].toString()).call();
+				}
 			} catch (GitAPIException e) {
 				throw new XPathException(new ErrorCode("exgit351", "Git API Error on clone"),
 						"Error cloning: " + e.getLocalizedMessage());
