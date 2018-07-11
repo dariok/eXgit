@@ -356,7 +356,7 @@ public class GitFunctions extends BasicFunction {
 				result.addAll(readCollectionFromDisk(content.toString(), pathToCollection + "/" + name));
 			} else {
 				// TODO ggf. filter übergeben lassen?
-				if (content.toString().substring(content.toString().length() - 6).matches(".xml|.xsl|.css|.xql|.xqm|.js|.xconf")) {
+				if (content.toString().substring(content.toString().length() - 6).matches(".xml|.xsl|.css|.xql|.xqm|.js|.xconf|.html")) {
 					Txn transaction;
 					try {
 						transaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
@@ -384,7 +384,7 @@ public class GitFunctions extends BasicFunction {
 					}
 					
 					try {
-						if (name.substring(name.length() - 4).matches(".xml|.xsl|.xconf") ) {
+						if (name.substring(name.length() - 4).matches(".xml|.xsl|.xconf|.html") ) {
 							IndexInfo info;
 						
 							try {
