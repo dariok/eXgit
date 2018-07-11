@@ -133,7 +133,16 @@ public class GitFunctions extends BasicFunction {
 							new FunctionParameterSequenceType("branch", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The branch to clone (e.g. 'refs/heads/development').")},
 					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE,
-							"The clone result."))
+							"The clone result.")),
+			new FunctionSignature(new QName("checkout", Exgit.NAMESPACE_URI, Exgit.PREFIX),
+					"Checkount a specific commit.",
+					new SequenceType[] {
+							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The full path to the local git repository."),
+							new FunctionParameterSequenceType("commit", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The hash of the commit or the full tag (i.e. 'refs/tags/my-tag') to checkout.")},
+					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE,
+							"The result."))
 			};
 
 	public GitFunctions(XQueryContext context, FunctionSignature signature) {
@@ -154,6 +163,18 @@ public class GitFunctions extends BasicFunction {
 		
 		Git git = null;
 		switch (functionName) {
+		case "checkout":
+			try {
+				git = getRepo(args[0].toString());
+				git.checkout().setName(args[1].toString()).call();
+			} catch (GitAPIException e) {
+				throw new XPathException(new ErrorCode("exgit361", "Git API Error on checkout"),
+						"Error cloning: " + e.getLocalizedMessage());
+			} finally {
+				git.close();
+			}
+			
+			break;
 		case "clone":
 			String repo = args[0].toString();
 			String local = args[1].toString();
