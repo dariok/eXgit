@@ -112,7 +112,16 @@ public class GitFunctions extends BasicFunction {
 							new FunctionParameterSequenceType("collection", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The collection to import from disk.")},
 					new FunctionReturnSequenceType(Type.BOOLEAN, Cardinality.EXACTLY_ONE,
-							"true if successful, false otherwise"))
+							"true if successful, false otherwise")),
+			new FunctionSignature(new QName("clone", Exgit.NAMESPACE_URI, Exgit.PREFIX),
+					"Clone $repo to $repoDir.",
+					new SequenceType[] {
+							new FunctionParameterSequenceType("repo", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The full URL for the repo to be cloned."),
+							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The full path to the local folder to clone into.")},
+					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE,
+							"The clone result."))
 			};
 
 	public GitFunctions(XQueryContext context, FunctionSignature signature) {
@@ -131,8 +140,25 @@ public class GitFunctions extends BasicFunction {
 		
 		// TODO function to initialize the git repo
 		
-		Git git;
+		Git git = null;
 		switch (functionName) {
+		case "clone":
+			String repo = args[0].toString();
+			String local = args[1].toString();
+			
+			try {
+				git = Git.cloneRepository().setURI(repo).setDirectory(new File(local)).call();
+			} catch (GitAPIException e) {
+				throw new XPathException(new ErrorCode("exgit351", "Git API Error on clone"),
+						"Error cloning: " + e.getLocalizedMessage());
+			} finally {
+				git.close();
+			}
+			
+			result.add(new StringValue("Cloned into: " + local));
+			result.add(new StringValue("Result: " + git.toString()));
+			
+			break;
 		case "commit":
 			String message = args[1].toString();
 			
