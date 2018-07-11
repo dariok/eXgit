@@ -181,9 +181,19 @@ public class GitFunctions extends BasicFunction {
 			
 			try {
 				if (args.length == 2) {
-					git = Git.cloneRepository().setURI(repo).setDirectory(new File(local)).call();
+					git = Git.cloneRepository()
+							.setURI(repo)
+							.setDirectory(new File(local))
+							.setCloneSubmodules(true)
+							.call();
 				} else {
-					git = Git.cloneRepository().setURI(repo).setDirectory(new File(local)).setBranchesToClone(Collections.singleton(args[2].toString())).setBranch(args[2].toString()).call();
+					git = Git.cloneRepository()
+							.setURI(repo)
+							.setDirectory(new File(local))
+							.setBranchesToClone(Collections.singleton(args[2].toString()))
+							.setBranch(args[2].toString())
+							.setCloneSubmodules(true)
+							.call();
 				}
 			} catch (GitAPIException e) {
 				throw new XPathException(new ErrorCode("exgit351", "Git API Error on clone"),
