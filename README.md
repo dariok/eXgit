@@ -45,6 +45,9 @@ Currently, the following functions are available:
 1. `exgit:push($repoDir, $remote, $username, $password)` – push to `$remote` (e.g. 'origin') supplying your user credentials
 1. `exgit:pull($repoDir, $remote, $username, $password)` – pull from `$remote` (e.g. 'origin') supplying your user credentials
 1. `exgit:import($repoDir, $collection)` – read XML, CSS, XQuery and JS from the repo and store them in the given collection
+1. `exgit:clone($repo, $repoDir)` – clone a remote $repo into local $repoDir
+1. `exgit:clone($repo, $repoDir, $branch)` – clone $branch from remote $repo into local $repoDir
+1. `exgit:checkout($repoDir, $commit)` – checkout $commit from local $repoDir
 
 ### Example script - to run in eXide
 
