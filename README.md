@@ -67,6 +67,10 @@ let $import := exgit:import($repoDir, $collection)
 
 return $import
 ```
+### Example: check out a specific tag
+```XQuery
+let $co := exgit:checkout('/home/user/git/my-repo', 'refs/tags/my-tag')
+```
 
 ## Caveats and future
 Currently, HTTP is used as transport and the user credentials have to be supplied within the XQuery.
