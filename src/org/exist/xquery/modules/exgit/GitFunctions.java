@@ -20,6 +20,7 @@ import org.eclipse.jgit.dircache.DirCache;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.PushResult;
 import org.eclipse.jgit.transport.TagOpt;
@@ -338,9 +339,10 @@ public class GitFunctions extends BasicFunction {
 			for (Ref tag : tags) {
 				String ref = tag.toString();
 				if (ref.contains("tags")) {
-					int start = ref.indexOf("tags/") + 5;
-					int end = ref.indexOf('=');
-					result.add(new StringValue(ref.substring(start, end)));
+//					int start = ref.indexOf("tags/") + 5;
+//					int end = ref.indexOf('=');
+//					result.add(new StringValue(ref.substring(start, end)));
+					result.add(new StringValue(ref));
 				}
 			}
 			
