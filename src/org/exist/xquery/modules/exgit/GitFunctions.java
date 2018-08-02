@@ -17,10 +17,12 @@ import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.dircache.DirCache;
+import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.PushResult;
+import org.eclipse.jgit.transport.TagOpt;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.exist.EXistException;
 import org.exist.collections.Collection;
@@ -135,14 +137,21 @@ public class GitFunctions extends BasicFunction {
 					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE,
 							"The clone result.")),
 			new FunctionSignature(new QName("checkout", Exgit.NAMESPACE_URI, Exgit.PREFIX),
-					"Checkount a specific commit.",
+					"Checkout a specific commit.",
 					new SequenceType[] {
 							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The full path to the local git repository."),
 							new FunctionParameterSequenceType("commit", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The hash of the commit or the full tag (i.e. 'refs/tags/my-tag') to checkout.")},
 					new FunctionReturnSequenceType(Type.STRING, Cardinality.EXACTLY_ONE,
-							"The result."))
+							"The result.")),
+			new FunctionSignature(new QName("tags", Exgit.NAMESPACE_URI, Exgit.PREFIX),
+					"List all tags in a repo.",
+					new SequenceType[] {
+							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The full path to the local git repository.")},
+					new FunctionReturnSequenceType(Type.STRING, Cardinality.MANY,
+							"The tags in the repository."))
 			};
 
 	public GitFunctions(XQueryContext context, FunctionSignature signature) {
@@ -303,9 +312,38 @@ public class GitFunctions extends BasicFunction {
 			
 			result.add(new StringValue(p.toString()));
 		}
-		break;
+			break;
 		case "import":
 			result.addAll(readCollectionFromDisk(args[0].toString(), args[1].toString()));
+			break;
+		case "tags":
+			String address = args[0].toString();
+			
+			Iterable<Ref> tags;
+			try {
+				if (address.startsWith("http") || address.startsWith("ssh")) {
+					tags = Git.lsRemoteRepository().setRemote(address).setTags(true).call();
+				} else {
+					git = getRepo(address);
+					git.fetch().setTagOpt(TagOpt.FETCH_TAGS).call();
+					tags = git.tagList().call();
+					git.close();
+				}
+			} catch (GitAPIException e) {
+				throw new XPathException(new ErrorCode("exgit410", "repository error"),
+						"One of several possible errors has occurred trying to retrieve all tags from " + args[0].toString() + ": "
+							+ e.getLocalizedMessage());
+			}
+			
+			for (Ref tag : tags) {
+				String ref = tag.toString();
+				if (ref.contains("tags")) {
+					int start = ref.indexOf("tags/") + 5;
+					int end = ref.indexOf('=');
+					result.add(new StringValue(ref.substring(start, end)));
+				}
+			}
+			
 			break;
 		default:
 			throw new XPathException(new ErrorCode("exgit000", "function not found"),
