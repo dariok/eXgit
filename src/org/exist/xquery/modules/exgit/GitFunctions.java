@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Iterator;
 
 import org.eclipse.jgit.api.Git;
@@ -17,6 +18,7 @@ import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.dircache.DirCache;
+import org.eclipse.jgit.lib.AnyObjectId;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
@@ -56,6 +58,8 @@ import org.exist.xquery.value.Type;
 import org.exist.xquery.value.ValueSequence;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+
+import com.sun.corba.se.spi.ior.ObjectId;
 
 public class GitFunctions extends BasicFunction {
 	public final static FunctionSignature signature[] = {
@@ -347,6 +351,23 @@ public class GitFunctions extends BasicFunction {
 			}
 			
 			break;
+		case "info":
+			git = getRepo(args[0].toString());
+			Repository repository = git.getRepository();
+			RevWalk walk = new RevWalk(repository);
+			RevCommit commit;
+			
+			try {
+				org.eclipse.jgit.lib.ObjectId commitId = repository.resolve(args[1].toString());
+				commit = walk.parseCommit(commitId);
+			} catch (Exception e) {
+				throw new XPathException(new ErrorCode("exgit420", "repository error"),
+						"One of several possible errors has occurred trying to retrieve meta data for commit " + args[1].toString() + ": "
+							+ e.getLocalizedMessage());
+			}
+			
+			Date commitDate = commit.getCommitterIdent().getWhen();
+			String commitMsg = commit.getFullMessage();
 		default:
 			throw new XPathException(new ErrorCode("exgit000", "function not found"),
 					"The requested function " + functionName + " was not found in this module");
