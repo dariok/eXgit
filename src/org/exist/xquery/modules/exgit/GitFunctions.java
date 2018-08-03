@@ -155,7 +155,7 @@ public class GitFunctions extends BasicFunction {
 					new SequenceType[] {
 							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The full path to the local git repository.")},
-					new FunctionReturnSequenceType(Type.STRING, Cardinality.MANY,
+					new FunctionReturnSequenceType(Type.ELEMENT, Cardinality.MANY,
 							"The tags in the repository.")),
 			new FunctionSignature(new QName("info", Exgit.NAMESPACE_URI, Exgit.PREFIX),
 					"Return information about a commit.",
@@ -175,6 +175,7 @@ public class GitFunctions extends BasicFunction {
 	public Sequence eval(Sequence[] args, Sequence contextSequence) throws XPathException {
 		String functionName = getSignature().getName().getLocalPart();
 		ValueSequence result = new ValueSequence();
+		MemTreeBuilder builder = context.getDocumentBuilder();
 		
 		/* TODO somehow store within the collection that it belongs to a git repo and which repo that is
 		 * and where that repo  is to be found on the file system
@@ -349,17 +350,26 @@ public class GitFunctions extends BasicFunction {
 							+ e.getLocalizedMessage());
 			}
 			
+			builder.startDocument();
+			builder.startElement(new QName("tags", null, null), null);
+			
 			for (Ref tag : tags) {
 				String ref = tag.toString();
 				if (ref.contains("tags")) {
-//					int start = ref.indexOf("tags/") + 5;
-//					int end = ref.indexOf('=');
-//					result.add(new StringValue(ref.substring(start, end)));
-					result.add(new StringValue(ref));
+					int start = ref.indexOf("[") + 1;
+					int end = ref.indexOf('=');
+					
+					builder.startElement(new QName("tag", null, null), null);
+					builder.addAttribute(new QName("name", null, null), ref.substring(start, end));
+					builder.addAttribute(new QName("commit", null, null), ref.substring(end));
+					builder.endElement();
 				}
 			}
 			
-			break;
+			builder.endElement();
+			builder.endDocument();
+			
+			return (NodeValue) builder.getDocument().getDocumentElement();
 		case "info":
 			git = getRepo(args[0].toString());
 			Repository repository = git.getRepository();
@@ -377,9 +387,6 @@ public class GitFunctions extends BasicFunction {
 			
 			Date commitDate = commit.getCommitterIdent().getWhen();
 			String commitMsg = commit.getFullMessage();
-			
-			
-			MemTreeBuilder builder = context.getDocumentBuilder();
 			
 			builder.startDocument();
 			builder.startElement(new QName("commit", null, null), null);
