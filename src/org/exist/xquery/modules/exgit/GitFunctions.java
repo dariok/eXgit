@@ -18,7 +18,6 @@ import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.dircache.DirCache;
-import org.eclipse.jgit.lib.AnyObjectId;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
@@ -32,6 +31,7 @@ import org.exist.collections.Collection;
 import org.exist.collections.IndexInfo;
 import org.exist.collections.triggers.TriggerException;
 import org.exist.dom.QName;
+import org.exist.dom.memtree.MemTreeBuilder;
 import org.exist.dom.persistent.BinaryDocument;
 import org.exist.dom.persistent.DocumentImpl;
 import org.exist.security.PermissionDeniedException;
@@ -51,6 +51,7 @@ import org.exist.xquery.XQueryContext;
 import org.exist.xquery.value.BooleanValue;
 import org.exist.xquery.value.FunctionParameterSequenceType;
 import org.exist.xquery.value.FunctionReturnSequenceType;
+import org.exist.xquery.value.NodeValue;
 import org.exist.xquery.value.Sequence;
 import org.exist.xquery.value.SequenceType;
 import org.exist.xquery.value.StringValue;
@@ -59,7 +60,6 @@ import org.exist.xquery.value.ValueSequence;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
-import com.sun.corba.se.spi.ior.ObjectId;
 
 public class GitFunctions extends BasicFunction {
 	public final static FunctionSignature signature[] = {
@@ -156,7 +156,16 @@ public class GitFunctions extends BasicFunction {
 							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The full path to the local git repository.")},
 					new FunctionReturnSequenceType(Type.STRING, Cardinality.MANY,
-							"The tags in the repository."))
+							"The tags in the repository.")),
+			new FunctionSignature(new QName("info", Exgit.NAMESPACE_URI, Exgit.PREFIX),
+					"Return information about a commit.",
+					new SequenceType[] {
+							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The full path to the local git repository."),
+							new FunctionParameterSequenceType("commit", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The commit's ID.")},
+					new FunctionReturnSequenceType(Type.ELEMENT, Cardinality.MANY,
+							"Structured information."))
 			};
 
 	public GitFunctions(XQueryContext context, FunctionSignature signature) {
@@ -368,6 +377,26 @@ public class GitFunctions extends BasicFunction {
 			
 			Date commitDate = commit.getCommitterIdent().getWhen();
 			String commitMsg = commit.getFullMessage();
+			
+			
+			MemTreeBuilder builder = context.getDocumentBuilder();
+			
+			builder.startDocument();
+			builder.startElement(new QName("commit", null, null), null);
+			builder.addAttribute(new QName("id", null, null), args[1].toString());
+			
+			builder.startElement(new QName("message", null, null), null);
+			builder.characters(commitMsg);
+			builder.endElement();
+			
+			builder.startElement(new QName("date", null, null), null);
+			builder.characters(commitDate.toString());
+			builder.endElement();
+			
+			builder.endElement();
+			builder.endDocument();
+			
+			return (NodeValue) builder.getDocument().getDocumentElement();
 		default:
 			throw new XPathException(new ErrorCode("exgit000", "function not found"),
 					"The requested function " + functionName + " was not found in this module");
