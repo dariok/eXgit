@@ -361,7 +361,7 @@ public class GitFunctions extends BasicFunction {
 					
 					builder.startElement(new QName("tag", null, null), null);
 					builder.addAttribute(new QName("name", null, null), ref.substring(start, end));
-					builder.addAttribute(new QName("commit", null, null), ref.substring(end));
+					builder.addAttribute(new QName("commit", null, null), ref.substring(end + 1, ref.length() - 1));
 					builder.endElement();
 				}
 			}
