@@ -9,6 +9,11 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
@@ -397,7 +402,7 @@ public class GitFunctions extends BasicFunction {
 			builder.endElement();
 			
 			builder.startElement(new QName("date", null, null), null);
-			builder.characters(commitDate.toString());
+			builder.characters(ZonedDateTime.ofInstant(commitDate.toInstant(), ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
 			builder.endElement();
 			
 			builder.endElement();
