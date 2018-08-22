@@ -9,15 +9,15 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.FormatStyle;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
 
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.input.BOMInputStream;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.Status;
@@ -62,7 +62,6 @@ import org.exist.xquery.value.SequenceType;
 import org.exist.xquery.value.StringValue;
 import org.exist.xquery.value.Type;
 import org.exist.xquery.value.ValueSequence;
-import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 
@@ -478,13 +477,14 @@ public class GitFunctions extends BasicFunction {
 										+ e.getLocalizedMessage());
 					}
 					
-					InputSource data;
 					FileInputStream fis;
+					BOMInputStream bis;
 					String daten;
 					try {
 						fis = new FileInputStream(content.toFile());
-						data = new InputSource(fis);
-						daten = new String (Files.readAllBytes(content));
+						bis = new BOMInputStream(fis, false);
+						daten = IOUtils.toString(bis, "UTF-8");
+						bis.close();
 					} catch (IOException e) {
 						throw new XPathException(new ErrorCode("exgit521", "I/O error"),
 								"I/O error reading " + content.toString() + ": " + e.getLocalizedMessage());
@@ -492,7 +492,6 @@ public class GitFunctions extends BasicFunction {
 						transaction.abort();
 						transaction.close();
 						collection.getLock().release(LockMode.READ_LOCK);
-						
 					}
 					
 					try {
@@ -502,13 +501,12 @@ public class GitFunctions extends BasicFunction {
 							try {
 								info = collection.validateXMLResource(transaction, context.getBroker(),
 										XmldbURI.create(name),
-										//data);
-										daten);
+										daten.trim());
 							} catch (EXistException | PermissionDeniedException | SAXException | LockException
 									| IOException e) {
 								throw new XPathException(new ErrorCode("exgit522a", "XML validation error"),
 										"validation error for file " + content.toString() + ": " + e.getLocalizedMessage()
-										+ data.getSystemId() + " \\ " + data.hashCode());
+										+ " " + content.toString());
 							}
 							
 							try {
@@ -529,7 +527,7 @@ public class GitFunctions extends BasicFunction {
 									| IOException e) {
 								throw new XPathException(new ErrorCode("exgit522b", "validation error"),
 										"validation error for file " + content.toString() + ": " + e.getLocalizedMessage()
-										+ data.getSystemId() + " \\ " + data.hashCode());
+										+ " " + content.toString());
 							}
 							
 							String mime;
