@@ -502,32 +502,40 @@ public class GitFunctions extends BasicFunction {
 								info = collection.validateXMLResource(transaction, context.getBroker(),
 										XmldbURI.create(name),
 										daten.trim());
-							} catch (EXistException | PermissionDeniedException | SAXException | LockException
+							} catch (EXistException | SAXException | LockException
 									| IOException e) {
 								throw new XPathException(new ErrorCode("exgit522a", "XML validation error"),
 										"validation error for file " + content.toString() + ": " + e.getLocalizedMessage()
 										+ " " + content.toString());
+							} catch (PermissionDeniedException e) {
+								throw new XPathException(new ErrorCode("exgit002", "Permission denied writing to database"),
+										"The permission was denied to write " + content.toString() + ": " + e.getLocalizedMessage());
 							}
 							
 							try {
 								collection.store(transaction, context.getBroker(), info, 
 										//data);
 										daten);
-							} catch (EXistException | PermissionDeniedException | SAXException | LockException e) {
+							} catch (EXistException | SAXException | LockException e) {
 								throw new XPathException(new ErrorCode("exgit523a", "store error"),
 										"Error storing " + content.toString() + " into " + pathToCollection + ": "
 												+ e.getLocalizedMessage());
+							} catch (PermissionDeniedException e) {
+								throw new XPathException(new ErrorCode("exgit002", "Permission denied writing to database"),
+										"The permission was denied to write " + content.toString() + ": " + e.getLocalizedMessage());
 							}
 						} else {
 							BinaryDocument bin;
 							
 							try {
 								bin = collection.validateBinaryResource(transaction, context.getBroker(), XmldbURI.create(name));
-							} catch (PermissionDeniedException | SAXException | LockException
+							} catch (SAXException | LockException
 									| IOException e) {
 								throw new XPathException(new ErrorCode("exgit522b", "validation error"),
-										"validation error for file " + content.toString() + ": " + e.getLocalizedMessage()
-										+ " " + content.toString());
+										"validation error for file " + content.toString() + ": " + e.getLocalizedMessage());
+							} catch (PermissionDeniedException e) {
+								throw new XPathException(new ErrorCode("exgit002", "Permission denied writing to database"),
+										"The permission was denied to write " + content.toString() + ": " + e.getLocalizedMessage());
 							}
 							
 							String mime;
@@ -541,11 +549,14 @@ public class GitFunctions extends BasicFunction {
 										fis,
 										mime,
 										bin.getContentLength());
-							} catch (EXistException | PermissionDeniedException | SAXException | LockException
+							} catch (EXistException | SAXException | LockException
 									| IOException e) {
 								throw new XPathException(new ErrorCode("exgit523b", "store error"),
 										"Error storing " + content.toString() + " into " + pathToCollection + ": "
 												+ e.getLocalizedMessage());
+							} catch (PermissionDeniedException e) {
+								throw new XPathException(new ErrorCode("exgit002", "Permission denied writing to database"),
+										"The permission was denied to write " + content.toString() + ": " + e.getLocalizedMessage());
 							}
 						}
 						
