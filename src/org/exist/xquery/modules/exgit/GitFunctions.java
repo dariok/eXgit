@@ -207,6 +207,17 @@ public class GitFunctions extends BasicFunction {
 			String repo = args[0].toString();
 			String local = args[1].toString();
 			
+			File target = new File(local);
+			
+			if (target.exists() && target.isDirectory() && target.list().length > 0) {
+				throw new XPathException(new ErrorCode("exgit350a", "target is not empty"),
+						"Could not clone into " + local + ": directory exists and is not empty");
+			}
+			if (target.exists() && !target.isDirectory()) {
+				throw new XPathException(new ErrorCode("exgit350b", "target is a file"),
+						"Could not clone into " + local + ": is a file");
+			}
+			
 			try {
 				if (args.length == 2) {
 					git = Git.cloneRepository()
