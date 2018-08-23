@@ -484,7 +484,6 @@ public class GitFunctions extends BasicFunction {
 						fis = new FileInputStream(content.toFile());
 						bis = new BOMInputStream(fis, false);
 						daten = IOUtils.toString(bis, "UTF-8");
-						bis.close();
 					} catch (IOException e) {
 						throw new XPathException(new ErrorCode("exgit521", "I/O error"),
 								"I/O error reading " + content.toString() + ": " + e.getLocalizedMessage());
@@ -564,10 +563,14 @@ public class GitFunctions extends BasicFunction {
 					} finally {
 						try {
 							transaction.commit();
+							bis.close();
 						} catch (TransactionException e) {
 							throw new XPathException(new ErrorCode("exgit512", "transaction error"),
 									"error committing transaction " + transaction.getId() + " for " + contents.toString()
 									+ " into " + pathToCollection + ": " + e.getLocalizedMessage());
+						} catch (IOException e) {
+							throw new XPathException(new ErrorCode("exgit531", "I/O error closing stream"),
+									"error closing stream for " + contents.toString() + ": " + e.getLocalizedMessage());
 						} finally {
 							transaction.abort();
 							transaction.close();
