@@ -72,6 +72,32 @@ return $import
 let $co := exgit:checkout('/home/user/git/my-repo', 'refs/tags/my-tag')
 ```
 
+## Error Codes
+| code | meaning |
+|--|--|
+| **0xx** | **errors managing local repo** |
+| 000 | No such file or directory<br>Nothing was found matching the given path |
+| 003 | Not an absolute path<br>The path given is not an absolute path |
+| 010 | No such directory<br>The given path points to a file |
+| 011 | Not writable<br>The given path exits and is a directory but permission was denied to write for the given path |
+| 022 | I/O error: cannot create directory<br>The given path does not exist and an I/O error occurred when trying create the given directory|
+| 030 | No Repository<br>The given path exists, is not empty and not a valid git repository |
+| 032 | I/O error checking for repo<br>The given path exists, is non empty but an I/O error occurred trying to check whether it is a git repo |
+| | |
+| 1xx | function errors |
+| 2xx | errors writing to disc |
+| | |
+| **3xx** | **errors interacting with local repo** |
+| *35x* | *errors cloning* |
+| 353 | Invalid remote<br>The URL given does not point to a valid remote repository |
+| 359 | Git API error on clone<br>A general API errors was raised; see the message for details|
+| *36x* | *errors checking out* |
+| 360 | Requested ref not found <br>The ref that was specified in the request could not be found in the repo|
+| 363 | Checkout conflict<br>There was a conflict trying to checkout the specified ref|
+| 369 | Git API Error on checkout<br>A general API errors was raised; see the message for details|
+| 4xx | errors interacting with remote repo |
+| 5xx | errors reading from disc |
+
 ## Caveats and future
 Currently, HTTP is used as transport and the user credentials have to be supplied within the XQuery.
 One of the next steps is to a) add SSH as a mode of transport and b) support to store credentials

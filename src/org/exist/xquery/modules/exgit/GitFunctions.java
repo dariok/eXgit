@@ -22,7 +22,10 @@ import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.api.errors.InvalidRemoteException;
+import org.eclipse.jgit.api.errors.RefNotFoundException;
 import org.eclipse.jgit.dircache.DirCache;
+import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
@@ -190,33 +193,41 @@ public class GitFunctions extends BasicFunction {
 		// TODO function to initialize the git repo
 		
 		Git git = null;
+		String repo;
+		String ref;
+		String local;
+		
 		switch (functionName) {
 		case "checkout":
+			local = args[0].toString();
+			ref = args[1].toString();
+			
 			try {
-				git = getRepo(args[0].toString());
-				git.checkout().setName(args[1].toString()).call();
+				git = getRepo(local);
+				git.checkout().setName(ref).call();
+			} catch (RefNotFoundException rnfe) {
+				throw new XPathException(new ErrorCode("exgit360", "Requested ref not found in repo"),
+					"The requested ref " + ref + " was not found in repo " + local
+					+ ": " + rnfe.getLocalizedMessage());
+			} catch (org.eclipse.jgit.api.errors.CheckoutConflictException cce) {
+				throw new XPathException(new ErrorCode("exgit363", "Checkout conflict"),
+					"Conflict checking out ref " + ref + " in repo " + local
+					+ ": " + cce.getLocalizedMessage());
 			} catch (GitAPIException e) {
-				throw new XPathException(new ErrorCode("exgit361", "Git API Error on checkout"),
-						"Error cloning: " + e.getLocalizedMessage());
+				throw new XPathException(new ErrorCode("exgit369", "Git API Error on checkout"),
+					"General git API error checking out ref " + ref + " in repo " + local
+					+ ": " + e.getLocalizedMessage());
 			} finally {
 				git.close();
 			}
 			
 			break;
 		case "clone":
-			String repo = args[0].toString();
-			String local = args[1].toString();
+			repo = args[0].toString();
+			local = args[1].toString();
 			
-			File target = new File(local);
-			
-			if (target.exists() && target.isDirectory() && target.list().length > 0) {
-				throw new XPathException(new ErrorCode("exgit350a", "target is not empty"),
-						"Could not clone into " + local + ": directory exists and is not empty");
-			}
-			if (target.exists() && !target.isDirectory()) {
-				throw new XPathException(new ErrorCode("exgit350b", "target is a file"),
-						"Could not clone into " + local + ": is a file");
-			}
+			Path localPath = getDir(local);
+			File target = localPath.toFile();
 			
 			try {
 				if (args.length == 2) {
@@ -234,9 +245,12 @@ public class GitFunctions extends BasicFunction {
 							.setCloneSubmodules(true)
 							.call();
 				}
+			} catch (InvalidRemoteException ire) {
+				throw new XPathException(new ErrorCode("exgit353", "Invalid remote"),
+					"Error cloning " + repo + " into " + local + ": " + ire.getLocalizedMessage());
 			} catch (GitAPIException e) {
-				throw new XPathException(new ErrorCode("exgit351", "Git API Error on clone"),
-						"Error cloning: " + e.getLocalizedMessage());
+				throw new XPathException(new ErrorCode("exgit359", "Git API Error on clone"),
+					"General error cloning " + repo + " into " + local + ": " + e.getLocalizedMessage());
 			} finally {
 				git.close();
 			}
@@ -486,15 +500,16 @@ public class GitFunctions extends BasicFunction {
 						throw new XPathException(new ErrorCode("exgit511", "Transaction error"),
 								"Error creating transaction to store in " + pathToCollection + ": "
 										+ e.getLocalizedMessage());
+					} finally {
+						transaction.abort();
+						transaction.close();
 					}
 					
 					FileInputStream fis;
-					BOMInputStream bis;
-					String daten;
+					
 					try {
 						fis = new FileInputStream(content.toFile());
-						bis = new BOMInputStream(fis, false);
-						daten = IOUtils.toString(bis, "UTF-8");
+						
 					} catch (IOException e) {
 						throw new XPathException(new ErrorCode("exgit521", "I/O error"),
 								"I/O error reading " + content.toString() + ": " + e.getLocalizedMessage());
@@ -507,8 +522,13 @@ public class GitFunctions extends BasicFunction {
 					try {
 						if (name.matches(".*(xml|xsl|xconf|html)$") ) {
 							IndexInfo info;
-						
+							BOMInputStream bis;
+							String daten;
+							
 							try {
+								bis = new BOMInputStream(fis, false);
+								daten = IOUtils.toString(bis, "UTF-8");
+								
 								info = collection.validateXMLResource(transaction, context.getBroker(),
 										XmldbURI.create(name),
 										daten.trim());
@@ -523,9 +543,7 @@ public class GitFunctions extends BasicFunction {
 							}
 							
 							try {
-								collection.store(transaction, context.getBroker(), info, 
-										//data);
-										daten);
+								collection.store(transaction, context.getBroker(), info, daten);
 							} catch (EXistException | SAXException | LockException e) {
 								throw new XPathException(new ErrorCode("exgit523a", "store error"),
 										"Error storing " + content.toString() + " into " + pathToCollection + ": "
@@ -559,8 +577,7 @@ public class GitFunctions extends BasicFunction {
 										fis,
 										mime,
 										bin.getContentLength());
-							} catch (EXistException | SAXException | LockException
-									| IOException e) {
+							} catch (EXistException | SAXException | LockException | IOException e) {
 								throw new XPathException(new ErrorCode("exgit523b", "store error"),
 										"Error storing " + content.toString() + " into " + pathToCollection + ": "
 												+ e.getLocalizedMessage());
@@ -574,7 +591,7 @@ public class GitFunctions extends BasicFunction {
 					} finally {
 						try {
 							transaction.commit();
-							bis.close();
+							fis.close();
 						} catch (TransactionException e) {
 							throw new XPathException(new ErrorCode("exgit512", "transaction error"),
 									"error committing transaction " + transaction.getId() + " for " + contents.toString()
@@ -704,27 +721,60 @@ public class GitFunctions extends BasicFunction {
 		return collection;
 	}
 	
-	/* exception codes 10x */
+	/* exception codes 0xx */
+	/**
+	 * checks whether pathToLocal is an empty directory or a repo; if it does not exist within its parent,
+	 * it will be created.
+	 * @param pathToLocal – must be an absolute path
+	 * @return Path
+	 * @throws XPathException
+	 */
 	private Path getDir (String pathToLocal) throws XPathException {
 		Path repo = Paths.get(pathToLocal);
-
-		if (Files.exists(repo) && !Files.isDirectory(repo))
-				throw new XPathException(new ErrorCode("exgit101", "no such directory"),
-						"The requested local repository was not found under the given path "
-								+ repo.toAbsolutePath().toString() + ".");
-		if (Files.exists(repo) && !Files.isWritable(repo))
-			throw new XPathException(new ErrorCode("exgit102", "not writable"),
-					"The requested local repository " + repo.toAbsolutePath().toString() + " is not writable");
+		
+		if (!repo.isAbsolute())
+			throw new XPathException(new ErrorCode("exgit003", "not an absolute path"),
+				"The path supplied is not an absolute path: " + pathToLocal + ".");
+		
+		/* if the parent does not exist, we do not attempt to create a hierarchy */
+		if (!Files.exists(repo.getParent()))
+			throw new XPathException(new ErrorCode("exgit000", "no such file or directory"),
+				"Nothing was found under the given (parent) path: "
+					+ repo.getParent().toAbsolutePath().toString() + ".");
 		
 		if (!Files.exists(repo)) {
 			try {
 				Files.createDirectory(repo);
 			} catch (IOException e) {
-				throw new XPathException(new ErrorCode("exgit103", "cannot create directory"),
-						"The requested local directory " + repo.toAbsolutePath().toString() + " could not be created");
+				throw new XPathException(new ErrorCode("exgit022", "I/O error: cannot create directory"),
+					"An I/O error occurred trying to create " + pathToLocal + ".");
+			}
+		} else {
+			File possibleGitRepo = new File(pathToLocal);
+			
+			if (!possibleGitRepo.isDirectory())
+				throw new XPathException(new ErrorCode("exgit010", "no such directory"),
+					"The given path points to a file: " + pathToLocal + ".");
+			if (!Files.isWritable(repo))
+				throw new XPathException(new ErrorCode("exgit011", "not writable"),
+					"The permission to write was denied for " + pathToLocal + ".");
+			if (possibleGitRepo.list().length != 0) {
+				FileRepositoryBuilder trb = new FileRepositoryBuilder();
+				trb.setMustExist(true).setGitDir(possibleGitRepo);
+				try {
+					trb.build();
+				} catch (RepositoryNotFoundException rnfe) {
+					throw new XPathException(new ErrorCode("exgit030", "not a repository"),
+						"The given path was found, not empty and is not a repo: " + pathToLocal + ".");
+				} catch (IOException ioe) {
+					throw new XPathException(new ErrorCode("exgit032", "I/O error checking for repo"),
+						"An I/O error occurred trying to check " + repo.toAbsolutePath().toString() + ".");
+				}
 			}
 		}
 		
+		/* now: repo either was created and is thus empty or exists and was empty or exists and is
+		 * already a git repo. */
 		return repo;
-	}
+	} 
 }
