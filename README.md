@@ -88,6 +88,11 @@ let $co := exgit:checkout('/home/user/git/my-repo', 'refs/tags/my-tag')
 | 2xx | errors writing to disc |
 | | |
 | **3xx** | **errors interacting with local repo** |
+| *30x* | *errors committing* |
+| 303 | Wrong repository state |
+| 304 | No head |
+| 305 | Unmerged Paths |
+| 309 | Git API Error on commit<br>A general API errors was raised; see the message for details|
 | *35x* | *errors cloning* |
 | 353 | Invalid remote<br>The URL given does not point to a valid remote repository |
 | 359 | Git API error on clone<br>A general API errors was raised; see the message for details|

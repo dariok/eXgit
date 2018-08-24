@@ -18,12 +18,16 @@ import java.util.Iterator;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.input.BOMInputStream;
+import org.eclipse.jgit.api.CommitCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.InvalidRemoteException;
+import org.eclipse.jgit.api.errors.NoHeadException;
 import org.eclipse.jgit.api.errors.RefNotFoundException;
+import org.eclipse.jgit.api.errors.UnmergedPathsException;
+import org.eclipse.jgit.api.errors.WrongRepositoryStateException;
 import org.eclipse.jgit.dircache.DirCache;
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.lib.Ref;
@@ -261,14 +265,13 @@ public class GitFunctions extends BasicFunction {
 			break;
 		case "commit":
 			String message = args[1].toString();
-			
-			git = getRepo(args[0].toString());
+			local = args[0].toString();
+			git = getRepo(local);
 			
 			String add;	// added files
 			String del; // deleted files
 			String chg;	// changed files
 			String mod;	// modified files
-			RevCommit c;
 			try {
 				// make sure that new files are added; cf. #4
 				@SuppressWarnings("unused")
@@ -279,20 +282,33 @@ public class GitFunctions extends BasicFunction {
 				mod = stat.getModified().toString();
 				add = stat.getAdded().toString();
 				del = stat.getRemoved().toString();
-				
-				if (args.length == 2) {
-					c = git.commit().setAll(true).setMessage(message).call();
-				} else {
-					c = git.commit().setAll(true).setMessage(message).setAuthor(args[2].toString(), args[3].toString()).call();
-				}
 			} catch (GitAPIException e) {
-				throw new XPathException(new ErrorCode("exgit301", "Git API Error on commit"),
-						"Error committing: " + e.getLocalizedMessage());
-			} finally {
-				git.close();
+				throw new XPathException(new ErrorCode("exgit309a", "Git API Error on add"),
+						"Error adding files to " + local + ": " + e.getLocalizedMessage());
+			} 
+			
+			CommitCommand comm = git.commit().setAll(true).setMessage(message);
+			if (args.length == 3)
+				comm.setAuthor(args[2].toString(), args[3].toString());
+			
+			RevCommit c;
+			try {
+				c = comm.call();
+			} catch (WrongRepositoryStateException wrse) {
+				throw new XPathException(new ErrorCode("exgit303", "Wrong repository state"),
+					"Wrong repository state committing to " + local + ": " + wrse.getLocalizedMessage());
+			} catch (NoHeadException nhe) {
+				throw new XPathException(new ErrorCode("exgit304", "No Head"),
+					"No head when committing to " + local + ": " + nhe.getLocalizedMessage());
+			} catch (UnmergedPathsException upe) {
+				throw new XPathException(new ErrorCode("exgit305", "Unmerged data"),
+					"Unmerged data when committing to " + local + ": " + upe.getLocalizedMessage());
+			} catch (GitAPIException e) {
+				throw new XPathException(new ErrorCode("exgit309b", "Git API Error on add"),
+					"Error adding files to " + local + ": " + e.getLocalizedMessage());
 			}
 			
-			result.add(new StringValue("Path to local repo: " + args[0].toString()));
+			result.add(new StringValue("Path to local repo: " + local));
 			result.add(new StringValue("Changed: " + chg));
 			result.add(new StringValue("Modified: " + mod));
 			result.add(new StringValue("Added: " + add));
