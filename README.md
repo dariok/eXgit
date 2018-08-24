@@ -87,12 +87,20 @@ let $co := exgit:checkout('/home/user/git/my-repo', 'refs/tags/my-tag')
 | 1xx | function errors |
 | 2xx | errors writing to disc |
 | | |
-| **3xx** | **errors interacting with local repo** |
+| **3xx** | **errors raised by file operations on repositories** |
 | *30x* | *errors committing* |
 | 303 | Wrong repository state |
 | 304 | No head |
 | 305 | Unmerged Paths |
 | 309 | Git API Error on commit<br>A general API errors was raised; see the message for details|
+| *31x* | *errors pushing* |
+| 313 | Invalid remote |
+| 314 | Transport error |
+| 319 | Git API error pushing<br>A general API errors was raised; see the message for details|
+| *32x* | *errors pulling* |
+| 323 | Invalid remote |
+| 324 | Transport error |
+| 329 | Git API error pulling<br>A general API errors was raised; see the message for details|
 | *35x* | *errors cloning* |
 | 353 | Invalid remote<br>The URL given does not point to a valid remote repository |
 | 359 | Git API error on clone<br>A general API errors was raised; see the message for details|
@@ -100,7 +108,9 @@ let $co := exgit:checkout('/home/user/git/my-repo', 'refs/tags/my-tag')
 | 360 | Requested ref not found <br>The ref that was specified in the request could not be found in the repo|
 | 363 | Checkout conflict<br>There was a conflict trying to checkout the specified ref|
 | 369 | Git API Error on checkout<br>A general API errors was raised; see the message for details|
-| 4xx | errors interacting with remote repo |
+| **4xx** | **errors raised by metadata operations on repositories** |
+| *40x* | *errors fetching tags* |
+| 409 | Git API Error fetching tags<br>A general API errors was raised; see the message for details|
 | 5xx | errors reading from disc |
 
 ## Caveats and future

@@ -18,6 +18,7 @@ import java.util.Iterator;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.input.BOMInputStream;
+import org.eclipse.jgit.api.CloneCommand;
 import org.eclipse.jgit.api.CommitCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.PullResult;
@@ -26,6 +27,7 @@ import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.InvalidRemoteException;
 import org.eclipse.jgit.api.errors.NoHeadException;
 import org.eclipse.jgit.api.errors.RefNotFoundException;
+import org.eclipse.jgit.api.errors.TransportException;
 import org.eclipse.jgit.api.errors.UnmergedPathsException;
 import org.eclipse.jgit.api.errors.WrongRepositoryStateException;
 import org.eclipse.jgit.dircache.DirCache;
@@ -186,7 +188,6 @@ public class GitFunctions extends BasicFunction {
 	public Sequence eval(Sequence[] args, Sequence contextSequence) throws XPathException {
 		String functionName = getSignature().getName().getLocalPart();
 		ValueSequence result = new ValueSequence();
-		MemTreeBuilder builder = context.getDocumentBuilder();
 		
 		/* TODO somehow store within the collection that it belongs to a git repo and which repo that is
 		 * and where that repo  is to be found on the file system
@@ -196,18 +197,13 @@ public class GitFunctions extends BasicFunction {
 		
 		// TODO function to initialize the git repo
 		
-		Git git = null;
-		String repo;
-		String ref;
-		String local;
-		
 		switch (functionName) {
 		case "checkout":
-			local = args[0].toString();
-			ref = args[1].toString();
+		{
+			String local = getDir(args[0].toString()).toString();
+			String ref = args[1].toString();
 			
-			try {
-				git = getRepo(local);
+			try (Git git = getRepo(local)) {
 				git.checkout().setName(ref).call();
 			} catch (RefNotFoundException rnfe) {
 				throw new XPathException(new ErrorCode("exgit360", "Requested ref not found in repo"),
@@ -221,52 +217,42 @@ public class GitFunctions extends BasicFunction {
 				throw new XPathException(new ErrorCode("exgit369", "Git API Error on checkout"),
 					"General git API error checking out ref " + ref + " in repo " + local
 					+ ": " + e.getLocalizedMessage());
-			} finally {
-				git.close();
 			}
 			
 			break;
+		}
 		case "clone":
-			repo = args[0].toString();
-			local = args[1].toString();
+		{
+			String repo = args[0].toString();
+			String local = getDir(args[1].toString()).toString();
 			
-			Path localPath = getDir(local);
-			File target = localPath.toFile();
+			CloneCommand cc = Git.cloneRepository()
+					.setURI(repo)
+					.setDirectory(new File(local))
+					.setCloneSubmodules(true);
 			
-			try {
-				if (args.length == 2) {
-					git = Git.cloneRepository()
-							.setURI(repo)
-							.setDirectory(new File(local))
-							.setCloneSubmodules(true)
-							.call();
-				} else {
-					git = Git.cloneRepository()
-							.setURI(repo)
-							.setDirectory(new File(local))
-							.setBranchesToClone(Collections.singleton(args[2].toString()))
-							.setBranch(args[2].toString())
-							.setCloneSubmodules(true)
-							.call();
-				}
+			if (args.length == 3)
+				cc.setBranchesToClone(Collections.singleton(args[2].toString()))
+						.setBranch(args[2].toString());
+			
+			try (Git git = cc.call()) {
+				result.add(new StringValue("Cloned into: " + local));
+				result.add(new StringValue("Result: " + git.toString()));
 			} catch (InvalidRemoteException ire) {
 				throw new XPathException(new ErrorCode("exgit353", "Invalid remote"),
 					"Error cloning " + repo + " into " + local + ": " + ire.getLocalizedMessage());
 			} catch (GitAPIException e) {
 				throw new XPathException(new ErrorCode("exgit359", "Git API Error on clone"),
 					"General error cloning " + repo + " into " + local + ": " + e.getLocalizedMessage());
-			} finally {
-				git.close();
 			}
 			
-			result.add(new StringValue("Cloned into: " + local));
-			result.add(new StringValue("Result: " + git.toString()));
-			
 			break;
+		}
 		case "commit":
+		{
 			String message = args[1].toString();
-			local = args[0].toString();
-			git = getRepo(local);
+			String local = getDir(args[0].toString()).toString();
+			Git git = getRepo(local);
 			
 			String add;	// added files
 			String del; // deleted files
@@ -317,23 +303,28 @@ public class GitFunctions extends BasicFunction {
 			result.add(new StringValue("Author: " + c.getAuthorIdent().toString()));
 			
 			break;
+		}
 		case "push":
 		{
 			String remote = args[1].toString();
 			String username = args[2].toString();
 			String password = args[3].toString();
-			
-			git = getRepo(args[0].toString());
+			String local = getDir(args[0].toString()).toString();
 			
 			Iterable<PushResult> p;
-			try {
+			try (Git git = getRepo(local)) {
 				p = git.push().setRemote(remote)
-						.setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, password)).call();
+						.setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, password))
+						.call();
+			} catch (InvalidRemoteException ire) {
+				throw new XPathException(new ErrorCode("exgit313", "Invalid remote"),
+					"Invalid remote when pushing to " + remote + ": " + ire.getLocalizedMessage());
+			} catch (TransportException te) {
+				throw new XPathException(new ErrorCode("exgit314", "Transport Exception"),
+					"Transport error when pushing to " + remote + te.getLocalizedMessage());
 			} catch (GitAPIException e) {
-				throw new XPathException(new ErrorCode("exgit311", "Git API error on push"),
-						"Error pushing to remote '" + remote + "': " + e.toString());
-			} finally {
-				git.close();
+				throw new XPathException(new ErrorCode("exgit319", "Git API error on push"),
+					"General API error pushing to '" + remote + "': " + e.toString());
 			}
 			
 			
@@ -346,28 +337,38 @@ public class GitFunctions extends BasicFunction {
 				
 				// TODO ggf. getRemoteUpdates().iterator().next() -> einzelne teile des Status
 			}
+			break;
 		}
-			break;
 		case "export":
-			result.add(new BooleanValue(writeCollectionToDisk(args[0].toString(), args[1].toString())));
+		{
+			// We check that an export only happens into a repo or empty directory
+			String local = getDir(args[0].toString()).toString();
+			String collection = args[1].toString();
+			
+			result.add(new BooleanValue(writeCollectionToDisk(local, collection)));
 			break;
+		}
 		case "pull":
 		{
 			String remote = args[1].toString();
 			String username = args[2].toString();
 			String password = args[3].toString();
-			
-			git = getRepo(args[0].toString());
+			String local = getDir(args[0].toString()).toString();
 			
 			PullResult p;
-			try {
-				p = git.pull().setRemote(remote).setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, password)).call();
+			try (Git git = getRepo(local)) {
+				p = git.pull().setRemote(remote)
+						.setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, password))
+						.call();
+			} catch (InvalidRemoteException ire) {
+				throw new XPathException(new ErrorCode("exgit323", "Invalid remote"),
+					"Invalid remote when puling from " + remote + ": " + ire.getLocalizedMessage());
+			} catch (TransportException te) {
+				throw new XPathException(new ErrorCode("exgit324", "Transport Exception"),
+					"Transport error when pulling from " + remote + te.getLocalizedMessage());
 			} catch (GitAPIException e) {
-				throw new XPathException(new ErrorCode("exgit401", "pull error"),
-						"One of several possible errors has occurred pulling " + args[0].toString() + ": "
-							+ e.getLocalizedMessage());
-			} finally {
-				git.close();
+				throw new XPathException(new ErrorCode("exgit329", "Git API error on pull"),
+						"General API error pulling from remote '" + remote + "': " + e.toString());
 			}
 			
 			result.add(new StringValue(p.toString()));
@@ -377,24 +378,28 @@ public class GitFunctions extends BasicFunction {
 			result.addAll(readCollectionFromDisk(args[0].toString(), args[1].toString()));
 			break;
 		case "tags":
+		{
 			String address = args[0].toString();
-			
 			Iterable<Ref> tags;
-			try {
-				if (address.startsWith("http") || address.startsWith("ssh")) {
+			
+			if (address.startsWith("http") || address.startsWith("ssh")) {
+				try {
 					tags = Git.lsRemoteRepository().setRemote(address).setTags(true).call();
-				} else {
-					git = getRepo(address);
+				} catch (GitAPIException e) {
+					throw new XPathException(new ErrorCode("exgit409a", "Git API error fetching tags"),
+						"General API fetching tags from '" + address + "': " + e.toString());
+				}
+			} else {
+				try (Git git = getRepo(address)) {
 					git.fetch().setTagOpt(TagOpt.FETCH_TAGS).call();
 					tags = git.tagList().call();
-					git.close();
+				} catch (GitAPIException e) {
+					throw new XPathException(new ErrorCode("exgit409b", "Git API error fetching tags"),
+						"General API fetching tags from '" + address + "': " + e.toString());
 				}
-			} catch (GitAPIException e) {
-				throw new XPathException(new ErrorCode("exgit410", "repository error"),
-						"One of several possible errors has occurred trying to retrieve all tags from " + args[0].toString() + ": "
-							+ e.getLocalizedMessage());
 			}
 			
+			MemTreeBuilder builder = context.getDocumentBuilder();
 			builder.startDocument();
 			builder.startElement(new QName("tags", null, null), null);
 			
@@ -415,8 +420,11 @@ public class GitFunctions extends BasicFunction {
 			builder.endDocument();
 			
 			return (NodeValue) builder.getDocument().getDocumentElement();
+		}
 		case "info":
-			git = getRepo(args[0].toString());
+		{
+			String local = getDir(args[0].toString()).toString();
+			Git git = getRepo(local);
 			Repository repository = git.getRepository();
 			RevWalk walk = new RevWalk(repository);
 			RevCommit commit;
@@ -428,11 +436,14 @@ public class GitFunctions extends BasicFunction {
 				throw new XPathException(new ErrorCode("exgit420", "repository error"),
 						"One of several possible errors has occurred trying to retrieve meta data for commit " + args[1].toString() + ": "
 							+ e.getLocalizedMessage());
+			} finally {
+				walk.close();
 			}
 			
 			Date commitDate = commit.getCommitterIdent().getWhen();
 			String commitMsg = commit.getFullMessage();
 			
+			MemTreeBuilder builder = context.getDocumentBuilder();
 			builder.startDocument();
 			builder.startElement(new QName("commit", null, null), null);
 			builder.addAttribute(new QName("id", null, null), args[1].toString());
@@ -449,6 +460,7 @@ public class GitFunctions extends BasicFunction {
 			builder.endDocument();
 			
 			return (NodeValue) builder.getDocument().getDocumentElement();
+		}
 		default:
 			throw new XPathException(new ErrorCode("exgit000", "function not found"),
 					"The requested function " + functionName + " was not found in this module");
