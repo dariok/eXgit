@@ -424,20 +424,16 @@ public class GitFunctions extends BasicFunction {
 		case "info":
 		{
 			String local = getDir(args[0].toString()).toString();
-			Git git = getRepo(local);
-			Repository repository = git.getRepository();
-			RevWalk walk = new RevWalk(repository);
 			RevCommit commit;
 			
-			try {
+			try (Git git = getRepo(local);
+					Repository repository = git.getRepository();
+					RevWalk walk = new RevWalk(repository);) {
 				org.eclipse.jgit.lib.ObjectId commitId = repository.resolve(args[1].toString());
 				commit = walk.parseCommit(commitId);
 			} catch (Exception e) {
-				throw new XPathException(new ErrorCode("exgit420", "repository error"),
-						"One of several possible errors has occurred trying to retrieve meta data for commit " + args[1].toString() + ": "
-							+ e.getLocalizedMessage());
-			} finally {
-				walk.close();
+				throw new XPathException(new ErrorCode("exgit419", "Git API error getting repo info"),
+						"General API getting repo info for " + local + ": " + e.toString());
 			}
 			
 			Date commitDate = commit.getCommitterIdent().getWhen();
@@ -462,7 +458,7 @@ public class GitFunctions extends BasicFunction {
 			return (NodeValue) builder.getDocument().getDocumentElement();
 		}
 		default:
-			throw new XPathException(new ErrorCode("exgit000", "function not found"),
+			throw new XPathException(new ErrorCode("exgit100", "function not found"),
 					"The requested function " + functionName + " was not found in this module");
 		}
 		
@@ -473,50 +469,54 @@ public class GitFunctions extends BasicFunction {
 	private ValueSequence readCollectionFromDisk (String pathToLocal, String pathToCollection) throws XPathException {
 		Path repo = getDir(pathToLocal);
 		
-		//org.exist.collections.Collection collection = getCollection(pathToCollection);
-		Txn collTransaction;
 		XmldbURI uri = XmldbURI.create(pathToCollection);
+		
 		Collection collection;
 		try {
 			collection = context.getBroker().getCollection(uri);
-			if (collection == null) {
-				collTransaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
-				collection = context.getBroker().getOrCreateCollection(collTransaction,
-						XmldbURI.create(pathToCollection));
-				context.getBroker().saveCollection(collTransaction, collection);
-				collTransaction.commit();
-				collTransaction.close();
-				collection.release(LockMode.WRITE_LOCK);
-			}
-		} catch (EXistException | TriggerException | PermissionDeniedException | IOException e1) {
-			throw new XPathException(new ErrorCode("exgit500", "collection not found"),
-					"Could not find nor create " + pathToCollection + ": " + e1.getLocalizedMessage());
+		} catch (PermissionDeniedException pde) {
+			throw new XPathException(new ErrorCode("exgit501", "Permission denied accessing collection"),
+				"Permission denied when trying to access the existing collection " + pathToCollection
+						+ ": " + pde.toString());
 		}
 		
-		
-		ValueSequence result = new ValueSequence();
+		if (collection == null) {
+			try (Txn collTransaction = BrokerPool.getInstance().getTransactionManager().beginTransaction()) {
+				collection = context.getBroker()
+						.getOrCreateCollection(collTransaction,
+								XmldbURI.create(pathToCollection));
+				context.getBroker().saveCollection(collTransaction, collection);
+				collTransaction.commit();
+				collection.release(LockMode.WRITE_LOCK);
+			} catch (PermissionDeniedException pde) {
+				throw new XPathException(new ErrorCode("exgit511", "Permission denied creating collection"),
+						"Permission denied when trying to crate the collection " + pathToCollection
+								+ ": " + pde.toString());
+			} catch (Exception e) {
+				throw new XPathException(new ErrorCode("exgit519", "General error creating collection"),
+						"A genreal API error occurred when trying to crate the collection "
+								+ pathToCollection + ": " + e.toString());
+			}
+		}
+		// we should now have a target to import into
 		
 		Iterator<Path> contents;
 		try {
 			contents = Files.list(repo).iterator();
 		} catch (IOException e) {
-			throw new XPathException(new ErrorCode("exgit501", "I/O error"),
+			throw new XPathException(new ErrorCode("exgit522", "I/O error reading inpur"),
 					"I/O error reading " + pathToLocal + ": " + e.getLocalizedMessage());
 		}
-			
+		
+		ValueSequence result = new ValueSequence();
 		while (contents.hasNext()) {
 			Path content = contents.next();
+			String name = content.getFileName().toString();
 			
-			String name;
-			if (content.toString().contains("/")) {
-				name = content.toString().substring(content.toString().lastIndexOf('/') + 1);
-			} else {
-				name = content.toString().substring(content.toString().lastIndexOf('\\') + 1);
-			}
-			
+			// skip hidden files (e.g. `.git`)
 			if (name.startsWith(".")) continue;
 			
-			if (Files.isDirectory(content) ) {
+			if (Files.isDirectory(content)) {
 				result.addAll(readCollectionFromDisk(content.toString(), pathToCollection + "/" + name));
 			} else {
 				// TODO ggf. filter übergeben lassen?

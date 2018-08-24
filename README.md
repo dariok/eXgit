@@ -108,10 +108,18 @@ let $co := exgit:checkout('/home/user/git/my-repo', 'refs/tags/my-tag')
 | 360 | Requested ref not found <br>The ref that was specified in the request could not be found in the repo|
 | 363 | Checkout conflict<br>There was a conflict trying to checkout the specified ref|
 | 369 | Git API Error on checkout<br>A general API errors was raised; see the message for details|
+| | |
 | **4xx** | **errors raised by metadata operations on repositories** |
 | *40x* | *errors fetching tags* |
 | 409 | Git API Error fetching tags<br>A general API errors was raised; see the message for details|
-| 5xx | errors reading from disc |
+| *41x* | *errors getting repo info* |
+| 419 | Git API Error getting repo info<br>A general API errors was raised; see the message for details|
+| | |
+| **5xx** | **errors reading from disc** |
+| 501 | Permission denied accessing the specified collection |
+| 511 | Permission denied trying to create the specified 
+| 519 | General error trying to create the specified collection |
+| 522 | I/O error reading from the specified input path |
 
 ## Caveats and future
 Currently, HTTP is used as transport and the user credentials have to be supplied within the XQuery.
