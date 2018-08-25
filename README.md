@@ -116,9 +116,9 @@ let $co := exgit:checkout('/home/user/git/my-repo', 'refs/tags/my-tag')
 | 419 | Git API Error getting repo info<br>A general API errors was raised; see the message for details|
 | | |
 | **5xx** | **errors reading from disc** |
-| 500 | File not found |
+| 500 | The Path specified was not found |
 | 501 | Permission denied accessing the specified collection |
-| 511 | Permission denied trying to create the specified 
+| 511 | Permission denied trying to create the specified collection |
 | 513 | Error acquiring an exclusive lock to the specified collection |
 | 519 | General error trying to create the specified collection |
 | 522 | I/O error reading from the specified input path |
@@ -129,6 +129,8 @@ let $co := exgit:checkout('/home/user/git/my-repo', 'refs/tags/my-tag')
 | 542 | I/O error validating binary file
 | 543 | Validation or lock error when trying to vlaidate binary file |
 | 549 | General error trying to store a binary file
+| 550 | File not found in directory when ingesting a file |
+| 552 | I/O error when ingesting a file form directory |
 
 ## Caveats and future
 Currently, HTTP is used as transport and the user credentials have to be supplied within the XQuery.

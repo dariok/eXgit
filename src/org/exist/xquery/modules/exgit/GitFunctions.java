@@ -488,8 +488,12 @@ public class GitFunctions extends BasicFunction {
 	
 	// exception codes 5xx
 	private ValueSequence readCollectionFromDisk (String pathToLocal, String pathToCollection) throws XPathException {
-		Path repo = getDir(pathToLocal);
 		Logger logger = LogManager.getLogger();
+		
+		Path repo = Paths.get(pathToLocal);
+		if (Files.exists(repo))
+			throw new XPathException(new ErrorCode("exgit500", "Path not found trying to ingest"),
+					"Import could not find anything under " + pathToLocal + ".");
 		
 		XmldbURI uri = XmldbURI.create(pathToCollection);
 		
@@ -594,7 +598,7 @@ public class GitFunctions extends BasicFunction {
 							result.add(addBinary(collection, transaction, fis, content, name));
 						}
 					} catch (FileNotFoundException fnf) {
-						throw new XPathException(new ErrorCode("exgit500", "File not found ingesting"),
+						throw new XPathException(new ErrorCode("exgit550", "File not found ingesting"),
 							"File not found trying to store " + content.toString() + " into " 
 								+ collection.getURI().toString() + " : " + fnf.getLocalizedMessage());
 					} catch (IOException e2) {
