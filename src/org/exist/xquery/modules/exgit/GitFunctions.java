@@ -19,6 +19,8 @@ import java.util.Iterator;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.input.BOMInputStream;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.eclipse.jgit.api.CloneCommand;
 import org.eclipse.jgit.api.CommitCommand;
 import org.eclipse.jgit.api.Git;
@@ -487,6 +489,7 @@ public class GitFunctions extends BasicFunction {
 	// exception codes 5xx
 	private ValueSequence readCollectionFromDisk (String pathToLocal, String pathToCollection) throws XPathException {
 		Path repo = getDir(pathToLocal);
+		Logger logger = LogManager.getLogger();
 		
 		XmldbURI uri = XmldbURI.create(pathToCollection);
 		
@@ -534,68 +537,84 @@ public class GitFunctions extends BasicFunction {
 					"I/O error reading " + pathToLocal + ": " + e.getLocalizedMessage());
 		}
 		
-		ValueSequence result = new ValueSequence();
-		while (contents.hasNext()) {
-			Path content = contents.next();
-			String name = content.getFileName().toString();
+		Txn transaction = null;
+		ValueSequence result = null;
+		try {
+			transaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
 			
-			// skip hidden files (e.g. `.git`)
-			if (name.startsWith(".")) continue;
-			
-			if (Files.isDirectory(content)) {
-				result.addAll(readCollectionFromDisk(content.toString(), pathToCollection + "/" + name));
-			} else {
-				try (Txn transaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
-						FileInputStream fis = new FileInputStream(content.toFile());)
-				{
-					// TODO ggf. filter übergeben lassen?
-					if (content.toString().matches(".*(xml|xsl|xconf|html)$")) {
-						BOMInputStream bis = new BOMInputStream(fis, false);
-						String daten = IOUtils.toString(bis, "UTF-8");
-						
-						IndexInfo info = null;
-						try {
-							info = collection.validateXMLResource(transaction, context.getBroker(),
-								XmldbURI.create(name), daten);
-						} catch (SAXException s) {
-							throw new XPathException(new ErrorCode("exgit533", "Validation error for XML file"),
-								"Validation error for XML file " + content.toString() + ": "
-									+ s.getLocalizedMessage());
-						} catch (Exception e) {
-							throw new XPathException(new ErrorCode("exgit539a", "General error validating XML file"),
-								"A genereal error has occurred trying to validate" + content.toString()
+			result = new ValueSequence();
+			while (contents.hasNext()) {
+				Path content = contents.next();
+				String name = content.getFileName().toString();
+				
+				// skip hidden files (e.g. `.git`)
+				if (name.startsWith(".")) continue;
+				
+				if (Files.isDirectory(content)) {
+					result.addAll(readCollectionFromDisk(content.toString(), pathToCollection + "/" + name));
+				} else {
+					logger.info("Ingesting ", content);
+					try (FileInputStream fis = new FileInputStream(content.toFile()))
+					{
+						// TODO ggf. filter übergeben lassen?
+						if (content.toString().matches(".*(xml|xsl|xconf|html)$")) {
+							BOMInputStream bis = new BOMInputStream(fis, false);
+							String daten = IOUtils.toString(bis, "UTF-8");
+							
+							IndexInfo info = null;
+							try {
+								info = collection.validateXMLResource(transaction, context.getBroker(),
+									XmldbURI.create(name), daten);
+							} catch (SAXException s) {
+								throw new XPathException(new ErrorCode("exgit533", "Validation error for XML file"),
+									"Validation error for XML file " + content.toString() + ": "
+										+ s.getLocalizedMessage());
+							} catch (Exception e) {
+								throw new XPathException(new ErrorCode("exgit539a", "General error validating XML file"),
+									"A genereal error has occurred trying to validate" + content.toString()
+										+ ": " + e.getLocalizedMessage());
+							} // TODO store non wellformed or invalid XML as binary
+							
+							try {
+								collection.store(transaction, context.getBroker(), info, daten);
+							} catch (PermissionDeniedException pde) {
+								throw new XPathException(new ErrorCode("exgit531", "Permission denied"),
+									"Permission denied storing " + content.toString() + " into " 
+										+ uri + ": " + pde.getLocalizedMessage());
+							} catch (Exception e) {
+								throw new XPathException(new ErrorCode("exgit539b", "General error validating XML file"),
+									"A genereal error has occurred trying to validate" + content.toString()
 									+ ": " + e.getLocalizedMessage());
-						} // TODO store non wellformed or invalid XML as binary
-						
-						try {
-							collection.store(transaction, context.getBroker(), info, daten);
-						} catch (PermissionDeniedException pde) {
-							throw new XPathException(new ErrorCode("exgit531", "Permission denied"),
-								"Permission denied storing " + content.toString() + " into " 
-									+ uri + ": " + pde.getLocalizedMessage());
-						} catch (Exception e) {
-							throw new XPathException(new ErrorCode("exgit539b", "General error validating XML file"),
-								"A genereal error has occurred trying to validate" + content.toString()
-								+ ": " + e.getLocalizedMessage());
+							}
+						} else {
+							result.add(addBinary(collection, transaction, fis, content, name));
 						}
-					} else {
-						result.add(addBinary(collection, transaction, fis, content, name));
+					} catch (FileNotFoundException fnf) {
+						throw new XPathException(new ErrorCode("exgit500", "File not found ingesting"),
+							"File not found trying to store " + content.toString() + " into " 
+								+ collection.getURI().toString() + " : " + fnf.getLocalizedMessage());
+					} catch (IOException e2) {
+						throw new XPathException(new ErrorCode("exgit552", "I/O error ingesting"),
+							"An I/O error occurred trying to store " + content.toString() + " into " 
+								+ collection.getURI().toString() + " : " + e2.getLocalizedMessage());
 					}
-				} catch (EXistException e1) {
-					throw new XPathException(new ErrorCode("exgit559", "Exist error creating a transaction"),
-						"TAn error occurred creating a transaction for storing " + content.toString() + " into " 
-							+ collection.getURI().toString() + " : " + e1.getLocalizedMessage());
-				} catch (FileNotFoundException fnf) {
-					throw new XPathException(new ErrorCode("exgit500", "File not found ingesting"),
-						"File not found trying to store " + content.toString() + " into " 
-							+ collection.getURI().toString() + " : " + fnf.getLocalizedMessage());
-				} catch (IOException e2) {
-					throw new XPathException(new ErrorCode("exgit552", "I/O error ingesting"),
-						"An I/O error occurred trying to store " + content.toString() + " into " 
-							+ collection.getURI().toString() + " : " + e2.getLocalizedMessage());
 				}
 			}
+			
+			transaction.commit();
+		} catch (EXistException e3) {
+			throw new XPathException(new ErrorCode("exgit559", "Exist error creating a transaction"),
+					"TAn error occurred creating a transaction for storing into " 
+						+ collection.getURI().toString() + " : " + e3.getLocalizedMessage());
+		} finally {
+			if (transaction != null) {
+				if (transaction.getState() != Txn.State.COMMITTED)
+					transaction.abort();
+				
+				transaction.close();
+			}
 		}
+		
 		collection.getLock().release(LockMode.WRITE_LOCK);
 		return result;
 	}
