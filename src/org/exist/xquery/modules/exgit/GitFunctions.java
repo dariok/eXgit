@@ -769,23 +769,8 @@ public class GitFunctions extends BasicFunction {
 			if (!Files.isWritable(repo))
 				throw new XPathException(new ErrorCode("exgit011", "not writable"),
 					"The permission to write was denied for " + pathToLocal + ".");
-			if (possibleGitRepo.list().length != 0) {
-				FileRepositoryBuilder trb = new FileRepositoryBuilder();
-				trb.setMustExist(true).setGitDir(possibleGitRepo);
-				try {
-					trb.build();
-				} catch (RepositoryNotFoundException rnfe) {
-					throw new XPathException(new ErrorCode("exgit030", "not a repository"),
-						"The given path was found, not empty and is not a repo: " + pathToLocal + ".");
-				} catch (IOException ioe) {
-					throw new XPathException(new ErrorCode("exgit032", "I/O error checking for repo"),
-						"An I/O error occurred trying to check " + repo.toAbsolutePath().toString() + ".");
-				}
-			}
 		}
 		
-		/* now: repo either was created and is thus empty or exists and was empty or exists and is
-		 * already a git repo. */
 		return repo;
 	} 
 }
