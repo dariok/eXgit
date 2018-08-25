@@ -491,7 +491,7 @@ public class GitFunctions extends BasicFunction {
 		Logger logger = LogManager.getLogger();
 		
 		Path repo = Paths.get(pathToLocal);
-		if (Files.exists(repo))
+		if (!Files.exists(repo))
 			throw new XPathException(new ErrorCode("exgit500", "Path not found trying to ingest"),
 					"Import could not find anything under " + pathToLocal + ".");
 		
