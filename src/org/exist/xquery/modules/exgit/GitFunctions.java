@@ -541,6 +541,7 @@ public class GitFunctions extends BasicFunction {
 		ValueSequence result = null;
 		try {
 			transaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
+			logger.info("Beginning import of " + repo.toString() + "; transaction " + transaction.getId());
 			
 			result = new ValueSequence();
 			while (contents.hasNext()) {
@@ -553,7 +554,7 @@ public class GitFunctions extends BasicFunction {
 				if (Files.isDirectory(content)) {
 					result.addAll(readCollectionFromDisk(content.toString(), pathToCollection + "/" + name));
 				} else {
-					logger.info("Ingesting ", content);
+					logger.info("Ingesting " + content.toString() + "; transaction " + transaction.getId());
 					try (FileInputStream fis = new FileInputStream(content.toFile()))
 					{
 						// TODO ggf. filter übergeben lassen?
@@ -602,15 +603,20 @@ public class GitFunctions extends BasicFunction {
 			}
 			
 			transaction.commit();
+			logger.info("Finished importing " + repo.toString() + "; transaction " + transaction.getId());
 		} catch (EXistException e3) {
 			throw new XPathException(new ErrorCode("exgit559", "Exist error creating a transaction"),
 					"TAn error occurred creating a transaction for storing into " 
 						+ collection.getURI().toString() + " : " + e3.getLocalizedMessage());
 		} finally {
 			if (transaction != null) {
-				if (transaction.getState() != Txn.State.COMMITTED)
+				if (transaction.getState() != Txn.State.COMMITTED) {
+					logger.warn("An error occurred importing " + repo.toString()
+						+ "; aborting transaction " + transaction.getId()); 
 					transaction.abort();
+				}
 				
+				logger.info("closing transaction " + transaction.getId());
 				transaction.close();
 			}
 		}
