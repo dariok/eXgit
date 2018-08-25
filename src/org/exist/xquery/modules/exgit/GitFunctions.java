@@ -683,6 +683,7 @@ public class GitFunctions extends BasicFunction {
 		try {
 			documents = collection.iterator(context.getBroker());
 			subcollections = collection.collectionIterator(context.getBroker());
+			collection.getLock().acquire(LockMode.READ_LOCK);
 		} catch (PermissionDeniedException e) {
 			throw new XPathException(new ErrorCode("exgit201", "permission denied"),
 					"Access to the requested contents of collection " + collection.getURI().toString()
@@ -691,6 +692,9 @@ public class GitFunctions extends BasicFunction {
 			throw new XPathException(new ErrorCode("exgit202", "locking error"),
 					"Failed to obtain a lock on " + collection.getURI().toString() + ".");
 		}
+		
+		Logger logger = LogManager.getLogger();
+		logger.info("Starting export of " + pathToCollection + " to " + pathToLocal);
 		
 		while (documents.hasNext()) {
 			DocumentImpl doc = documents.next();
@@ -735,6 +739,7 @@ public class GitFunctions extends BasicFunction {
 		}
 		
 		collection.release(LockMode.READ_LOCK);
+		logger.info("Finished export of " + pathToCollection + " to " + pathToLocal);
 		
 		return true;
 	}
