@@ -567,9 +567,11 @@ public class GitFunctions extends BasicFunction {
 								info = collection.validateXMLResource(transaction, context.getBroker(),
 									XmldbURI.create(name), daten);
 							} catch (SAXException s) {
-								throw new XPathException(new ErrorCode("exgit533", "Validation error for XML file"),
+								logger.info("XML file " + content.toString() + " is not valid; retrying as binary");
+								addBinary(collection, transaction, fis, content, name);
+								/*throw new XPathException(new ErrorCode("exgit533", "Validation error for XML file"),
 									"Validation error for XML file " + content.toString() + ": "
-										+ s.getLocalizedMessage());
+										+ s.getLocalizedMessage());*/
 							} catch (Exception e) {
 								throw new XPathException(new ErrorCode("exgit539a", "General error validating XML file"),
 									"A genereal error has occurred trying to validate" + content.toString()
@@ -578,6 +580,7 @@ public class GitFunctions extends BasicFunction {
 							
 							try {
 								collection.store(transaction, context.getBroker(), info, daten);
+								result.add(new StringValue(content.toString() + " -> " + collection.getURI().toString()));
 							} catch (PermissionDeniedException pde) {
 								throw new XPathException(new ErrorCode("exgit531", "Permission denied"),
 									"Permission denied storing " + content.toString() + " into " 
@@ -587,8 +590,6 @@ public class GitFunctions extends BasicFunction {
 									"A genereal error has occurred trying to validate" + content.toString()
 									+ ": " + e.getLocalizedMessage());
 							}
-							
-							result.add(new StringValue(content.toString() + " -> " + collection.getURI().toString()));
 						} else {
 							result.add(addBinary(collection, transaction, fis, content, name));
 						}
