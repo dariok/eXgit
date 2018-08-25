@@ -573,6 +573,7 @@ public class GitFunctions extends BasicFunction {
 							} catch (SAXException s) {
 								logger.info("XML file " + content.toString() + " is not valid; retrying as binary");
 								addBinary(collection, transaction, fis, content, name);
+								continue;
 								/*throw new XPathException(new ErrorCode("exgit533", "Validation error for XML file"),
 									"Validation error for XML file " + content.toString() + ": "
 										+ s.getLocalizedMessage());*/
@@ -580,7 +581,7 @@ public class GitFunctions extends BasicFunction {
 								throw new XPathException(new ErrorCode("exgit539a", "General error validating XML file"),
 									"A genereal error has occurred trying to validate" + content.toString()
 										+ ": " + e.getLocalizedMessage());
-							} // TODO store non wellformed or invalid XML as binary
+							}
 							
 							try {
 								collection.store(transaction, context.getBroker(), info, daten);
@@ -590,8 +591,8 @@ public class GitFunctions extends BasicFunction {
 									"Permission denied storing " + content.toString() + " into " 
 										+ uri + ": " + pde.getLocalizedMessage());
 							} catch (Exception e) {
-								throw new XPathException(new ErrorCode("exgit539b", "General error validating XML file"),
-									"A genereal error has occurred trying to validate" + content.toString()
+								throw new XPathException(new ErrorCode("exgit539b", "General error storing XML file"),
+									"A genereal error has occurred trying to store" + content.toString()
 									+ ": " + e.getLocalizedMessage());
 							}
 						} else {
