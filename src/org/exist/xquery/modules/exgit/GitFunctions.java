@@ -200,6 +200,9 @@ public class GitFunctions extends BasicFunction {
 		case "checkout":
 		{
 			String local = getDir(args[0].toString()).toString();
+			if (!isRepo(new File(local)))
+				throw new XPathException(new ErrorCode("exgit030f", "Not a git repo"),
+						"The selected path is not a git repo: " + local);
 			String ref = args[1].toString();
 			
 			try (Git git = getRepo(local)) {
@@ -251,6 +254,9 @@ public class GitFunctions extends BasicFunction {
 		{
 			String message = args[1].toString();
 			String local = getDir(args[0].toString()).toString();
+			if (!isRepo(new File(local)))
+				throw new XPathException(new ErrorCode("exgit030e", "Not a git repo"),
+						"The selected path is not a git repo: " + local);
 			Git git = getRepo(local);
 			
 			String add;	// added files
@@ -310,6 +316,10 @@ public class GitFunctions extends BasicFunction {
 			String password = args[3].toString();
 			String local = getDir(args[0].toString()).toString();
 			
+			if (!isRepo(new File(local)))
+				throw new XPathException(new ErrorCode("exgit030d", "Not a git repo"),
+						"The selected path is not a git repo: " + local);
+			
 			Iterable<PushResult> p;
 			try (Git git = getRepo(local)) {
 				p = git.push().setRemote(remote)
@@ -354,6 +364,10 @@ public class GitFunctions extends BasicFunction {
 			String password = args[3].toString();
 			String local = getDir(args[0].toString()).toString();
 			
+			if (!isRepo(new File(local)))
+				throw new XPathException(new ErrorCode("exgit030c", "Not a git repo"),
+						"The selected path is not a git repo: " + local);
+			
 			PullResult p;
 			try (Git git = getRepo(local)) {
 				p = git.pull().setRemote(remote)
@@ -389,6 +403,9 @@ public class GitFunctions extends BasicFunction {
 						"General API fetching tags from '" + address + "': " + e.toString());
 				}
 			} else {
+				if (!isRepo(new File(address)))
+					throw new XPathException(new ErrorCode("exgit030b", "Not a git repo"),
+							"The selected path is not a git repo: " + address);
 				try (Git git = getRepo(address)) {
 					git.fetch().setTagOpt(TagOpt.FETCH_TAGS).call();
 					tags = git.tagList().call();
@@ -423,8 +440,11 @@ public class GitFunctions extends BasicFunction {
 		case "info":
 		{
 			String local = getDir(args[0].toString()).toString();
-			RevCommit commit;
+			if (!isRepo(new File(local)))
+				throw new XPathException(new ErrorCode("exgit030a", "Not a git repo"),
+						"The selected path is not a git repo: " + local);
 			
+			RevCommit commit;
 			try (Git git = getRepo(local);
 					Repository repository = git.getRepository();
 					RevWalk walk = new RevWalk(repository);) {
@@ -772,5 +792,23 @@ public class GitFunctions extends BasicFunction {
 		}
 		
 		return repo;
-	} 
+	}
+	
+	private boolean isRepo(File possibleGitRepo) throws XPathException {
+		if (possibleGitRepo.list().length != 0) {
+			FileRepositoryBuilder trb = new FileRepositoryBuilder();
+			trb.setMustExist(true).setGitDir(possibleGitRepo);
+			try {
+				trb.build();
+			} catch (RepositoryNotFoundException rnfe) {
+				throw new XPathException(new ErrorCode("exgit030", "not a repository"),
+					"The given path was found, not empty and is not a repo: "
+						+ possibleGitRepo.getAbsolutePath() + ".");
+			} catch (IOException ioe) {
+				throw new XPathException(new ErrorCode("exgit032", "I/O error checking for repo"),
+					"An I/O error occurred trying to check " + possibleGitRepo.getAbsolutePath() + ".");
+			}
+		}
+		return true;
+	}
 }
