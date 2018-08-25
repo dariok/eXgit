@@ -587,6 +587,8 @@ public class GitFunctions extends BasicFunction {
 									"A genereal error has occurred trying to validate" + content.toString()
 									+ ": " + e.getLocalizedMessage());
 							}
+							
+							result.add(new StringValue(content.toString() + " -> " + collection.getURI().toString()));
 						} else {
 							result.add(addBinary(collection, transaction, fis, content, name));
 						}
