@@ -2,6 +2,7 @@ package org.exist.xquery.modules.exgit;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.UnsupportedEncodingException;
@@ -43,7 +44,6 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.exist.EXistException;
 import org.exist.collections.Collection;
 import org.exist.collections.IndexInfo;
-import org.exist.collections.triggers.TriggerException;
 import org.exist.dom.QName;
 import org.exist.dom.memtree.MemTreeBuilder;
 import org.exist.dom.persistent.BinaryDocument;
@@ -52,7 +52,6 @@ import org.exist.security.PermissionDeniedException;
 import org.exist.storage.BrokerPool;
 import org.exist.storage.lock.Lock.LockMode;
 import org.exist.storage.serializers.Serializer;
-import org.exist.storage.txn.TransactionException;
 import org.exist.storage.txn.Txn;
 import org.exist.util.LockException;
 import org.exist.xmldb.XmldbURI;
@@ -498,7 +497,13 @@ public class GitFunctions extends BasicFunction {
 								+ pathToCollection + ": " + e.toString());
 			}
 		}
-		collection.getLock().acquire(LockMode.WRITE_LOCK);
+		try {
+			collection.getLock().acquire(LockMode.WRITE_LOCK);
+		} catch (LockException e3) {
+			throw new XPathException(new ErrorCode("exgit513", "Error acquiring a lock"),
+				"An error occurred while trying to acquire a lock for collection " 
+					+ collection.getURI().toString() + " : " + e3.getLocalizedMessage());
+		}
 		// we should now have a target to import into
 		
 		Iterator<Path> contents;
@@ -534,11 +539,11 @@ public class GitFunctions extends BasicFunction {
 								XmldbURI.create(name), daten);
 						} catch (SAXException s) {
 							throw new XPathException(new ErrorCode("exgit533", "Validation error for XML file"),
-									"Validation error for XML file " + content.toString() + ": "
-											+ s.getLocalizedMessage());
+								"Validation error for XML file " + content.toString() + ": "
+									+ s.getLocalizedMessage());
 						} catch (Exception e) {
 							throw new XPathException(new ErrorCode("exgit539a", "General error validating XML file"),
-									"A genereal error has occurred trying to validate" + content.toString()
+								"A genereal error has occurred trying to validate" + content.toString()
 									+ ": " + e.getLocalizedMessage());
 						} // TODO store non wellformed or invalid XML as binary
 						
@@ -546,66 +551,79 @@ public class GitFunctions extends BasicFunction {
 							collection.store(transaction, context.getBroker(), info, daten);
 						} catch (PermissionDeniedException pde) {
 							throw new XPathException(new ErrorCode("exgit531", "Permission denied"),
-									"Permission denied storing " + content.toString() + " into " 
+								"Permission denied storing " + content.toString() + " into " 
 									+ uri + ": " + pde.getLocalizedMessage());
 						} catch (Exception e) {
 							throw new XPathException(new ErrorCode("exgit539b", "General error validating XML file"),
-									"A genereal error has occurred trying to validate" + content.toString()
-									+ ": " + e.getLocalizedMessage());
+								"A genereal error has occurred trying to validate" + content.toString()
+								+ ": " + e.getLocalizedMessage());
 						}
 					} else {
-						addBinary(a b c);
+						result.add(addBinary(collection, transaction, fis, content, name));
 					}
+				} catch (EXistException e1) {
+					throw new XPathException(new ErrorCode("exgit559", "Exist error creating a transaction"),
+						"TAn error occurred creating a transaction for storing " + content.toString() + " into " 
+							+ collection.getURI().toString() + " : " + e1.getLocalizedMessage());
+				} catch (FileNotFoundException fnf) {
+					throw new XPathException(new ErrorCode("exgit500", "File not found ingesting"),
+						"File not found trying to store " + content.toString() + " into " 
+							+ collection.getURI().toString() + " : " + fnf.getLocalizedMessage());
+				} catch (IOException e2) {
+					throw new XPathException(new ErrorCode("exgit552", "I/O error ingesting"),
+						"An I/O error occurred trying to store " + content.toString() + " into " 
+							+ collection.getURI().toString() + " : " + e2.getLocalizedMessage());
 				}
-						
-				/*		
-					} finally {
-						
-						collection.getLock().release(LockMode.READ_LOCK);
-					}
-				} else {
-					result.add(new StringValue(content.toString() + " could not be handeled"));
-				}*/
 			}
-			
 		}
 		collection.getLock().release(LockMode.WRITE_LOCK);
 		return result;
 	}
 	
-	private ValueSequence addBinary() {
+	private StringValue addBinary(Collection collection, Txn transaction, FileInputStream fis,
+			Path content, String name) throws XPathException {
 		BinaryDocument bin;
 		
 		try {
 			bin = collection.validateBinaryResource(transaction, context.getBroker(), XmldbURI.create(name));
-		} catch (SAXException | LockException
-				| IOException e) {
-			throw new XPathException(new ErrorCode("exgit522b", "validation error"),
-					"validation error for file " + content.toString() + ": " + e.getLocalizedMessage());
+		} catch (SAXException | LockException e) {
+			throw new XPathException(new ErrorCode("exgit543", "eXist error"),
+					"A valdation or lock error on eXist's side occurred for file " + content.toString()
+						+ ": " + e.getLocalizedMessage());
 		} catch (PermissionDeniedException e) {
-			throw new XPathException(new ErrorCode("exgit002", "Permission denied writing to database"),
-					"The permission was denied to write " + content.toString() + ": " + e.getLocalizedMessage());
+			throw new XPathException(new ErrorCode("exgit541a", "Permission denied validating binary file"),
+					"The permission was denied while validating binary file " + content.toString()
+						+ " : " + e.getLocalizedMessage());
+		} catch (IOException ioe) {
+			throw new XPathException(new ErrorCode("exgit542", "I/O error validating binary"),
+					"An I/O error occurred while validating binary file " + content.toString()
+						+ ": " + ioe.getLocalizedMessage());
 		}
 		
 		String mime;
 		if (name.endsWith(".css")) mime = "text/css";
 		else if (name.endsWith(".js")) mime = "application/javascript";
-		else  mime = "application/xquery";
+		else if (name.endsWith(".xql") || name.endsWith(".xqm")) mime = "application/xquery";
+		else mime = "application/octet-stream";
 		
 		try {
-			collection.addBinaryResource(transaction, context.getBroker(), 
+			collection.addBinaryResource(transaction,
+					context.getBroker(),
 					XmldbURI.create(name),
 					fis,
 					mime,
 					bin.getContentLength());
 		} catch (EXistException | SAXException | LockException | IOException e) {
-			throw new XPathException(new ErrorCode("exgit523b", "store error"),
-					"Error storing " + content.toString() + " into " + pathToCollection + ": "
-							+ e.getLocalizedMessage());
+			throw new XPathException(new ErrorCode("exgit549", "Error storing binary file"),
+					"Error storing " + content.toString() + " into " + collection.getURI().toString()
+						+ ": " + e.getLocalizedMessage());
 		} catch (PermissionDeniedException e) {
-			throw new XPathException(new ErrorCode("exgit002", "Permission denied writing to database"),
-					"The permission was denied to write " + content.toString() + ": " + e.getLocalizedMessage());
+			throw new XPathException(new ErrorCode("exgit541b", "Permission denied writing binary file to database"),
+					"The permission was denied to write binary file " + content.toString() + " into " 
+						+ collection.getURI().toString() + " : " + e.getLocalizedMessage());
 		}
+		
+		return new StringValue(content.toString() + " stored as binary resource");
 	}
 	
 	/* error codes 2xy */
