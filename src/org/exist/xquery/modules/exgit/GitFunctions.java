@@ -704,37 +704,10 @@ public class GitFunctions extends BasicFunction {
 		
 		while (documents.hasNext()) {
 			DocumentImpl doc = documents.next();
-			Serializer serializer = context.getBroker().getSerializer();
 			
 			Path filePath = Paths.get(repo.toString(), doc.getFileURI().toString());
 			
-			Writer writer;
-			try {
-				writer = new OutputStreamWriter(Files.newOutputStream(filePath), "UTF-8");
-			} catch (UnsupportedEncodingException e) {
-				throw new XPathException(new ErrorCode("exgit211", "unknown encoding"),
-						"The JRE does not know UTF-8; sth. very strange is going on.");
-			} catch (IOException e) {
-				throw new XPathException(new ErrorCode("exgit212", "I/O error"),
-						"Cannot write to " + filePath.toString() + ".");
-			}
-			
-			try {
-				serializer.reset();
-				serializer.serialize(doc, writer);
-				
-			} catch (SAXException e) {
-				throw new XPathException(new ErrorCode("exgit213", "serializer exception"),
-						"Serializing " + filePath.toString() + " failed: " + e.getLocalizedMessage() + ".");
-			}
-			finally {
-				try {
-					writer.close();
-				} catch (Exception e) {
-					throw new XPathException(new ErrorCode("exgit214", "serializer exception"),
-							"Cannot close " + filePath.toString() + ": " + e.getLocalizedMessage() + ".");
-				}
-			}
+			writeFile(filePath, doc);
 		}
 		
 		while (subcollections.hasNext()) {
@@ -748,6 +721,38 @@ public class GitFunctions extends BasicFunction {
 		logger.info("Finished export of " + pathToCollection + " to " + pathToLocal);
 		
 		return true;
+	}
+	
+	private void writeFile(Path filePath, DocumentImpl doc) throws XPathException {
+		Serializer serializer = context.getBroker().getSerializer();
+		Writer writer;
+		
+		try {
+			writer = new OutputStreamWriter(Files.newOutputStream(filePath), "UTF-8");
+		} catch (UnsupportedEncodingException e) {
+			throw new XPathException(new ErrorCode("exgit211", "unknown encoding"),
+					"The JRE does not know UTF-8; sth. very strange is going on.");
+		} catch (IOException e) {
+			throw new XPathException(new ErrorCode("exgit212", "I/O error"),
+					"Cannot write to " + filePath.toString() + ".");
+		}
+		
+		try {
+			serializer.reset();
+			serializer.serialize(doc, writer);
+			
+		} catch (SAXException e) {
+			throw new XPathException(new ErrorCode("exgit213", "serializer exception"),
+					"Serializing " + filePath.toString() + " failed: " + e.getLocalizedMessage() + ".");
+		}
+		finally {
+			try {
+				writer.close();
+			} catch (Exception e) {
+				throw new XPathException(new ErrorCode("exgit214", "serializer exception"),
+						"Cannot close " + filePath.toString() + ": " + e.getLocalizedMessage() + ".");
+			}
+		}
 	}
 	
 	/* exception codes 00x */
