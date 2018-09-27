@@ -68,6 +68,7 @@ import org.exist.xquery.value.FunctionParameterSequenceType;
 import org.exist.xquery.value.FunctionReturnSequenceType;
 import org.exist.xquery.value.NodeValue;
 import org.exist.xquery.value.Sequence;
+import org.exist.xquery.value.SequenceIterator;
 import org.exist.xquery.value.SequenceType;
 import org.exist.xquery.value.StringValue;
 import org.exist.xquery.value.Type;
@@ -179,7 +180,18 @@ public class GitFunctions extends BasicFunction {
 							new FunctionParameterSequenceType("commit", Type.STRING, Cardinality.EXACTLY_ONE,
 									"The commit's ID.")},
 					new FunctionReturnSequenceType(Type.ELEMENT, Cardinality.MANY,
-							"Structured information."))
+							"Structured information.")),
+			new FunctionSignature(new QName("exportFiles", Exgit.NAMESPACE_URI, Exgit.PREFIX),
+					"Write $collection to $repoDir.",
+					new SequenceType[] {
+							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The full path to the local git repository"),
+							new FunctionParameterSequenceType("collection", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The collection to export to disk."),
+							new FunctionParameterSequenceType("resources", Type.ANY_URI, Cardinality.ONE_OR_MORE,
+									"A sequence of relative file paths.")},
+					new FunctionReturnSequenceType(Type.BOOLEAN, Cardinality.EXACTLY_ONE,
+							"true if successful, false otherwise"))
 			};
 
 	public GitFunctions(XQueryContext context, FunctionSignature signature) {
@@ -357,6 +369,12 @@ public class GitFunctions extends BasicFunction {
 			String collection = args[1].toString();
 			
 			result.add(new BooleanValue(writeCollectionToDisk(local, collection)));
+			break;
+		}
+		case "exportFiles":
+		{
+			String local = getDir(args[0].toString()).toString();
+			result.add(new BooleanValue(writeFilesToDisk(local, args[1].toString(), args[2])));
 			break;
 		}
 		case "pull":
@@ -723,9 +741,45 @@ public class GitFunctions extends BasicFunction {
 		return true;
 	}
 	
+	private boolean writeFilesToDisk (String pathToLocal, String pathToCollection, Sequence files) throws XPathException {
+		Path repo;
+		org.exist.collections.Collection collection;
+		SequenceIterator paths;
+		
+		try {
+			collection = getCollection(pathToCollection);
+			repo  = getDir(pathToLocal);
+			paths = files.iterate();
+			
+			while (paths.hasNext()) {
+				String file = paths.nextItem().getStringValue();
+				Path filePath = Paths.get(repo.toString(), file);
+				XmldbURI uri = XmldbURI.create(pathToCollection + '/' + file);
+				
+				DocumentImpl doc;
+				try {
+					doc = collection.getDocument(context.getBroker(), uri);
+				} catch (PermissionDeniedException e) {
+					throw new XPathException(new ErrorCode("exgit211", "Permission denied"),
+							"Permission denied reading " + file + " from " + pathToCollection + ".");
+				}
+				
+				writeFile(filePath, doc);
+			}
+		} catch (XPathException xpe) {
+			throw new XPathException(new ErrorCode("exgit202", "error"),
+					xpe.toString() + ".");
+		}
+		
+		return true;
+	}
+	
 	private void writeFile(Path filePath, DocumentImpl doc) throws XPathException {
 		Serializer serializer = context.getBroker().getSerializer();
 		Writer writer;
+		
+		Logger logger = LogManager.getLogger();
+		logger.info("writing " + doc.getDocumentURI() + " to " + filePath.toString());
 		
 		try {
 			writer = new OutputStreamWriter(Files.newOutputStream(filePath), "UTF-8");
