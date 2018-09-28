@@ -52,6 +52,7 @@ import org.exist.dom.persistent.BinaryDocument;
 import org.exist.dom.persistent.DocumentImpl;
 import org.exist.security.PermissionDeniedException;
 import org.exist.storage.BrokerPool;
+import org.exist.storage.DBBroker;
 import org.exist.storage.lock.Lock.LockMode;
 import org.exist.storage.serializers.Serializer;
 import org.exist.storage.txn.Txn;
@@ -63,6 +64,7 @@ import org.exist.xquery.ErrorCodes.ErrorCode;
 import org.exist.xquery.FunctionSignature;
 import org.exist.xquery.XPathException;
 import org.exist.xquery.XQueryContext;
+import org.exist.xquery.functions.xmldb.XMLDBURIFunctions;
 import org.exist.xquery.value.BooleanValue;
 import org.exist.xquery.value.FunctionParameterSequenceType;
 import org.exist.xquery.value.FunctionReturnSequenceType;
@@ -747,24 +749,33 @@ public class GitFunctions extends BasicFunction {
 		SequenceIterator paths;
 		
 		try {
-			collection = getCollection(pathToCollection);
 			repo  = getDir(pathToLocal);
 			paths = files.iterate();
 			
 			while (paths.hasNext()) {
 				String file = paths.nextItem().getStringValue();
 				Path filePath = Paths.get(repo.toString(), file);
-				XmldbURI uri = XmldbURI.create(pathToCollection + '/' + file);
 				
+				String filename = file.substring(file.lastIndexOf('/') + 1, file.length());
+				String coll = pathToCollection + "/" + file.substring(0, file.lastIndexOf('/') + 1);
+				
+				Logger logger = LogManager.getLogger();
+				logger.info("exporting " + filename + " from " + coll + " to " + filePath.toString());
+				
+				collection = getCollection(coll);
 				DocumentImpl doc;
 				try {
-					doc = collection.getDocument(context.getBroker(), uri);
+					doc = collection.getDocumentWithLock(context.getBroker(), XmldbURI.create(filename), LockMode.READ_LOCK);
+					writeFile(filePath, doc);
+					collection.releaseDocument(doc, LockMode.READ_LOCK);
+					collection.release(LockMode.READ_LOCK);
 				} catch (PermissionDeniedException e) {
 					throw new XPathException(new ErrorCode("exgit211", "Permission denied"),
 							"Permission denied reading " + file + " from " + pathToCollection + ".");
+				} catch (LockException le) {
+					throw new XPathException(new ErrorCode("exgit214", "Permission denied"),
+							"Error getting a lock on " + file + " from " + pathToCollection + ".");
 				}
-				
-				writeFile(filePath, doc);
 			}
 		} catch (XPathException xpe) {
 			throw new XPathException(new ErrorCode("exgit202", "error"),
@@ -779,15 +790,16 @@ public class GitFunctions extends BasicFunction {
 		Writer writer;
 		
 		Logger logger = LogManager.getLogger();
-		logger.info("writing " + doc.getDocumentURI() + " to " + filePath.toString());
+		logger.info("writing " //+ doc.getDocId() 
+				+ " to " + filePath.toString());
 		
 		try {
 			writer = new OutputStreamWriter(Files.newOutputStream(filePath), "UTF-8");
 		} catch (UnsupportedEncodingException e) {
-			throw new XPathException(new ErrorCode("exgit211", "unknown encoding"),
+			throw new XPathException(new ErrorCode("exgit291", "unknown encoding"),
 					"The JRE does not know UTF-8; sth. very strange is going on.");
 		} catch (IOException e) {
-			throw new XPathException(new ErrorCode("exgit212", "I/O error"),
+			throw new XPathException(new ErrorCode("exgit292", "I/O error"),
 					"Cannot write to " + filePath.toString() + ".");
 		}
 		
@@ -796,14 +808,14 @@ public class GitFunctions extends BasicFunction {
 			serializer.serialize(doc, writer);
 			
 		} catch (SAXException e) {
-			throw new XPathException(new ErrorCode("exgit213", "serializer exception"),
+			throw new XPathException(new ErrorCode("exgit293", "serializer exception"),
 					"Serializing " + filePath.toString() + " failed: " + e.getLocalizedMessage() + ".");
 		}
 		finally {
 			try {
 				writer.close();
 			} catch (Exception e) {
-				throw new XPathException(new ErrorCode("exgit214", "serializer exception"),
+				throw new XPathException(new ErrorCode("exgit294", "serializer exception"),
 						"Cannot close " + filePath.toString() + ": " + e.getLocalizedMessage() + ".");
 			}
 		}
