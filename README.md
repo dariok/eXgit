@@ -49,6 +49,9 @@ Currently, the following functions are available:
 1. `exgit:clone($repo, $repoDir, $branch)` – clone $branch from remote $repo into local $repoDir
 1. `exgit:checkout($repoDir, $commit)` – checkout $commit from local $repoDir
 1. `exgit:tags($repository)` – list all tags in $repository; if it starts with “http” or “ssh“, a list of tags in the remote repo ist returned; else, it is assumed to point to a local repo and a fetch is executed prior to listing
+1. `exgit:info($repoDir, $commit)` – show git info for $commit in $repoDir
+1. `exgit:exportFiles($repoDir, $collection, $files as xs:anyURI+)` – export resources in $files (paths must be relative to $collection) from $collection to $repoDir
+1. `exgit:exportFiltered($repoDir, $collection, $regex)` – export resources from $collection to $repoDir that match $regex (full match!)
 
 ### Example script - to run in eXide
 
