@@ -394,6 +394,7 @@ public class GitFunctions extends BasicFunction {
 		{
 			String local = getDir(args[0].toString()).toString();
 			result.add(new BooleanValue(writeFilesFiltered(local, args[1].toString(), args[2].toString())));
+			break;
 		}
 		case "pull":
 		{
@@ -810,13 +811,13 @@ public class GitFunctions extends BasicFunction {
 		try {
 			documents = collection.iterator(context.getBroker());
 			subcollections = collection.collectionIterator(context.getBroker());
-			collection.getLock().acquire(LockMode.READ_LOCK);
+			//collection.getLock().acquire(LockMode.READ_LOCK);
 		} catch (PermissionDeniedException e) {
-			throw new XPathException(new ErrorCode("exgit201", "permission denied"),
+			throw new XPathException(new ErrorCode("exgit221", "permission denied"),
 					"Access to the requested contents of collection " + collection.getURI().toString()
 					+ " was denied.");
 		} catch (LockException e) {
-			throw new XPathException(new ErrorCode("exgit202", "locking error"),
+			throw new XPathException(new ErrorCode("exgit222", "locking error"),
 					"Failed to obtain a lock on " + collection.getURI().toString() + ".");
 		}
 		
@@ -828,18 +829,21 @@ public class GitFunctions extends BasicFunction {
 			
 			Path filePath = Paths.get(repo.toString(), doc.getFileURI().toString());
 			
-			if (doc.getFileURI().toString().matches(regex))
+			if (filePath.toString().matches(regex)) {
 				writeFile(filePath, doc);
+			}
 		}
 		
 		while (subcollections.hasNext()) {
 			XmldbURI coll = subcollections.next();
 			
-			writeCollectionToDisk(repo.toString() + "/" + coll.toString(),
-					pathToCollection + "/" + coll.toString());
+			writeFilesFiltered(repo.toString() + "/" + coll.toString(),
+					pathToCollection + "/" + coll.toString(), regex);
 		}
 		
 		collection.release(LockMode.READ_LOCK);
+//		logger.info(collection.getLock().toString());
+//		collection.release(LockMode.READ_LOCK);
 		logger.info("Finished export of " + pathToCollection + " to " + pathToLocal);
 		
 		return true;
@@ -850,8 +854,7 @@ public class GitFunctions extends BasicFunction {
 		Writer writer;
 		
 		Logger logger = LogManager.getLogger();
-		logger.info("writing " //+ doc.getDocId() 
-				+ " to " + filePath.toString());
+		logger.info("writing " + doc.getDocumentURI() + " (" + doc.getDocId() + ") to " + filePath.toString());
 		
 		try {
 			writer = new OutputStreamWriter(Files.newOutputStream(filePath), "UTF-8");
