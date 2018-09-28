@@ -193,6 +193,17 @@ public class GitFunctions extends BasicFunction {
 							new FunctionParameterSequenceType("resources", Type.ANY_URI, Cardinality.ONE_OR_MORE,
 									"A sequence of relative file paths.")},
 					new FunctionReturnSequenceType(Type.BOOLEAN, Cardinality.EXACTLY_ONE,
+							"true if successful, false otherwise")),
+			new FunctionSignature(new QName("exportFiltered", Exgit.NAMESPACE_URI, Exgit.PREFIX),
+					"Write $collection to $repoDir.",
+					new SequenceType[] {
+							new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The full path to the local git repository"),
+							new FunctionParameterSequenceType("collection", Type.STRING, Cardinality.EXACTLY_ONE,
+									"The collection to export to disk."),
+							new FunctionParameterSequenceType("regex", Type.STRING, Cardinality.EXACTLY_ONE,
+									"A regular expression to filter file names.")},
+					new FunctionReturnSequenceType(Type.BOOLEAN, Cardinality.EXACTLY_ONE,
 							"true if successful, false otherwise"))
 			};
 
@@ -378,6 +389,11 @@ public class GitFunctions extends BasicFunction {
 			String local = getDir(args[0].toString()).toString();
 			result.add(new BooleanValue(writeFilesToDisk(local, args[1].toString(), args[2])));
 			break;
+		}
+		case "exportFiltered":
+		{
+			String local = getDir(args[0].toString()).toString();
+			result.add(new BooleanValue(writeFilesFiltered(local, args[1].toString(), args[2].toString())));
 		}
 		case "pull":
 		{
@@ -781,6 +797,50 @@ public class GitFunctions extends BasicFunction {
 			throw new XPathException(new ErrorCode("exgit202", "error"),
 					xpe.toString() + ".");
 		}
+		
+		return true;
+	}
+	
+	private boolean writeFilesFiltered (String pathToLocal, String pathToCollection, String regex) throws XPathException {
+		Path repo = getDir(pathToLocal);
+		org.exist.collections.Collection collection = getCollection(pathToCollection);
+		
+		Iterator<DocumentImpl> documents;
+		Iterator<XmldbURI> subcollections;
+		try {
+			documents = collection.iterator(context.getBroker());
+			subcollections = collection.collectionIterator(context.getBroker());
+			collection.getLock().acquire(LockMode.READ_LOCK);
+		} catch (PermissionDeniedException e) {
+			throw new XPathException(new ErrorCode("exgit201", "permission denied"),
+					"Access to the requested contents of collection " + collection.getURI().toString()
+					+ " was denied.");
+		} catch (LockException e) {
+			throw new XPathException(new ErrorCode("exgit202", "locking error"),
+					"Failed to obtain a lock on " + collection.getURI().toString() + ".");
+		}
+		
+		Logger logger = LogManager.getLogger();
+		logger.info("Starting export of " + pathToCollection + " to " + pathToLocal + " with filter " + regex);
+		
+		while (documents.hasNext()) {
+			DocumentImpl doc = documents.next();
+			
+			Path filePath = Paths.get(repo.toString(), doc.getFileURI().toString());
+			
+			if (doc.getFileURI().toString().matches(regex))
+				writeFile(filePath, doc);
+		}
+		
+		while (subcollections.hasNext()) {
+			XmldbURI coll = subcollections.next();
+			
+			writeCollectionToDisk(repo.toString() + "/" + coll.toString(),
+					pathToCollection + "/" + coll.toString());
+		}
+		
+		collection.release(LockMode.READ_LOCK);
+		logger.info("Finished export of " + pathToCollection + " to " + pathToLocal);
 		
 		return true;
 	}
