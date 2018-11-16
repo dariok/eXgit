@@ -13,19 +13,20 @@ public class Exgit extends AbstractInternalModule {
 	public final static String RELEASED_IN_VERSION	= "eXist-3.4";
 
 	private final static FunctionDef[] functions = {
-			new FunctionDef(GitFunctions.signature[0], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[1], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[2], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[3], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[4], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[5], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[6], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[7], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[8], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[9], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[10], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[11], GitFunctions.class),
-			new FunctionDef(GitFunctions.signature[12], GitFunctions.class)
+		new FunctionDef(GitFunctions.signature[0], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[1], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[2], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[3], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[4], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[5], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[6], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[7], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[8], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[9], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[10], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[11], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[12], GitFunctions.class),
+		new FunctionDef(GitFunctions.signature[13], GitFunctions.class)
 	};
 
 	public Exgit(Map<String, List<?>> parameters) {
