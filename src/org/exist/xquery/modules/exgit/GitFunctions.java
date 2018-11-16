@@ -37,12 +37,14 @@ import org.eclipse.jgit.dircache.DirCache;
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.lib.RepositoryCache;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.PushResult;
 import org.eclipse.jgit.transport.TagOpt;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.eclipse.jgit.util.FS;
 import org.exist.EXistException;
 import org.exist.collections.Collection;
 import org.exist.collections.IndexInfo;
@@ -52,7 +54,6 @@ import org.exist.dom.persistent.BinaryDocument;
 import org.exist.dom.persistent.DocumentImpl;
 import org.exist.security.PermissionDeniedException;
 import org.exist.storage.BrokerPool;
-import org.exist.storage.DBBroker;
 import org.exist.storage.lock.Lock.LockMode;
 import org.exist.storage.serializers.Serializer;
 import org.exist.storage.txn.Txn;
@@ -64,7 +65,6 @@ import org.exist.xquery.ErrorCodes.ErrorCode;
 import org.exist.xquery.FunctionSignature;
 import org.exist.xquery.XPathException;
 import org.exist.xquery.XQueryContext;
-import org.exist.xquery.functions.xmldb.XMLDBURIFunctions;
 import org.exist.xquery.value.BooleanValue;
 import org.exist.xquery.value.FunctionParameterSequenceType;
 import org.exist.xquery.value.FunctionReturnSequenceType;
@@ -986,20 +986,22 @@ public class GitFunctions extends BasicFunction {
 	}
 	
 	private boolean isRepo(File possibleGitRepo) throws XPathException {
-		if (possibleGitRepo.list().length != 0) {
-			FileRepositoryBuilder trb = new FileRepositoryBuilder();
-			trb.setMustExist(true).setGitDir(possibleGitRepo);
-			try {
-				trb.build();
-			} catch (RepositoryNotFoundException rnfe) {
-				throw new XPathException(new ErrorCode("exgit030", "not a repository"),
-					"The given path was found, not empty and is not a repo: "
-						+ possibleGitRepo.getAbsolutePath() + ".");
-			} catch (IOException ioe) {
-				throw new XPathException(new ErrorCode("exgit032", "I/O error checking for repo"),
-					"An I/O error occurred trying to check " + possibleGitRepo.getAbsolutePath() + ".");
-			}
+		/* empty directory: can be used to clone into */
+		/*if (possibleGitRepo.list().length == 0) return true;*/
+		return RepositoryCache.FileKey.isGitRepository(possibleGitRepo, FS.DETECTED);
+		
+		/*FileRepositoryBuilder trb = new FileRepositoryBuilder();
+		trb.setMustExist(true).setGitDir(possibleGitRepo);
+		try {
+			trb.build();
+		} catch (RepositoryNotFoundException rnfe) {
+			throw new XPathException(new ErrorCode("exgit030", "not a repository"),
+				"The given path was found, not empty and is not a repo: "
+					+ possibleGitRepo.getAbsolutePath() + ".");
+		} catch (IOException ioe) {
+			throw new XPathException(new ErrorCode("exgit032", "I/O error checking for repo"),
+				"An I/O error occurred trying to check " + possibleGitRepo.getAbsolutePath() + ".");
 		}
-		return true;
+		return true;*/
 	}
 }
