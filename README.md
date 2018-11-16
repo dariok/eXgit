@@ -47,6 +47,7 @@ Currently, the following functions are available:
 1. `exgit:import($repoDir, $collection)` – read XML, CSS, XQuery and JS from the repo and store them in the given collection
 1. `exgit:clone($repo, $repoDir)` – clone a remote $repo into local $repoDir
 1. `exgit:clone($repo, $repoDir, $branch)` – clone $branch from remote $repo into local $repoDir
+1. `exgit:clone($repo, $repoDir, $branch, $username, $password)` – clone $branch from remote $repo into local $repoDir with the given credentials
 1. `exgit:checkout($repoDir, $commit)` – checkout $commit from local $repoDir
 1. `exgit:tags($repository)` – list all tags in $repository; if it starts with “http” or “ssh“, a list of tags in the remote repo ist returned; else, it is assumed to point to a local repo and a fetch is executed prior to listing
 1. `exgit:info($repoDir, $commit)` – show git info for $commit in $repoDir
