@@ -988,7 +988,10 @@ public class GitFunctions extends BasicFunction {
 	private boolean isRepo(File possibleGitRepo) throws XPathException {
 		/* empty directory: can be used to clone into */
 		/*if (possibleGitRepo.list().length == 0) return true;*/
-		return RepositoryCache.FileKey.isGitRepository(possibleGitRepo, FS.DETECTED);
+		
+		/* strangely, this may complain even immediately after a fresh clone */
+		return true;
+				//RepositoryCache.FileKey.isGitRepository(possibleGitRepo, FS.DETECTED);
 		
 		/*FileRepositoryBuilder trb = new FileRepositoryBuilder();
 		trb.setMustExist(true).setGitDir(possibleGitRepo);
