@@ -547,6 +547,7 @@ public class GitFunctions extends BasicFunction {
 		Logger logger = LogManager.getLogger();
 		
 		Path repo = Paths.get(pathToLocal);
+		logger.info("Got request to import from " + pathToLocal + " (parsed as " + repo.toString() + ") into " + pathToCollection);
 		if (!Files.exists(repo))
 			throw new XPathException(new ErrorCode("exgit500", "Path not found trying to ingest"),
 					"Import could not find anything under " + pathToLocal + ".");
