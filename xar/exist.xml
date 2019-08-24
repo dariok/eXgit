@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://exist-db.org/ns/expath-pkg">;
-    <jar>exgit-full.jar</jar>
-    <java>
-        <namespace>http://exist-db.org/xquery/exgit</namespace>
-        <class>org.exist.xquery.modules.exgit.Exgit</class>
-    </java>
-</package>
