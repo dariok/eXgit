@@ -21,10 +21,27 @@ If this does not work, try option 2.
 The packaged version includes all third-party JARs necessary to run eXgit. By using it you agree to the licenses under which these software packages are published;
 all licenses can be found in `THIRD-PARTY.TXT`.
 
+#### eXist < 5.0
+
 1. copy `target/exgit-full.jar` into your exist-db home directory `$eXist-db HOME$/lib/user`
 2. register eXgit module in `$exist-db HOME$/conf.xml`. Within `exist/xquery/builtin-modules` add:
     `<module uri="http://exist-db.org/xquery/exgit" class="org.exist.xquery.modules.exgit.Exgit"/>`
 1. restart eXist.
+
+#### eXist >= 5.0
+
+1. copy `target/exgit-full.jar` to `$eXist-db HOME$/lib`
+1. edit the configuration file for you startup script (e.g. `etc/startup.xml` for `bin/startup.sh/.bat`) and add:
+    ```
+    <dependency>
+       <groupId>org.exist.xquery.modules.exgit</groupId>
+       <artifactId>exgit</artifactId>
+       <version>0.1</version>
+       <relativePath>exgit-full.jar</relativePath>
+    </dependency>
+    ```
+1. (re-)start eXist and check `logs/exist.log` for any information
+1. if that does not work, try visiting https://github.com/eXist-db/documentation/issues/385 to see if any new info on how to load .jar has come up
 
 `target/exgit.jar` does not contain any dependencies; you are responsible to provide all dependencies for the module to work.
 
