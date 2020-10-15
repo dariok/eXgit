@@ -52,6 +52,7 @@ import org.exist.dom.QName;
 import org.exist.dom.memtree.MemTreeBuilder;
 import org.exist.dom.persistent.BinaryDocument;
 import org.exist.dom.persistent.DocumentImpl;
+import org.exist.dom.persistent.LockedDocument;
 import org.exist.security.PermissionDeniedException;
 import org.exist.storage.BrokerPool;
 import org.exist.storage.lock.Lock.LockMode;
@@ -570,7 +571,6 @@ public class GitFunctions extends BasicFunction {
 								XmldbURI.create(pathToCollection));
 				context.getBroker().saveCollection(collTransaction, collection);
 				collTransaction.commit();
-				collection.release(LockMode.WRITE_LOCK);
 			} catch (PermissionDeniedException pde) {
 				throw new XPathException(new ErrorCode("exgit511", "Permission denied creating collection"),
 						"Permission denied when trying to crate the collection " + pathToCollection
@@ -581,12 +581,18 @@ public class GitFunctions extends BasicFunction {
 								+ pathToCollection + ": " + e.toString());
 			}
 		}
+		collection.close();
 		try {
-			collection.getLock().acquire(LockMode.WRITE_LOCK);
-		} catch (LockException e3) {
+			collection = context.getBroker().openCollection(uri, LockMode.WRITE_LOCK);
+		} catch (PermissionDeniedException pde) {
+			throw new XPathException(new ErrorCode("exgit501", "Permission denied accessing collection"),
+					"Permission denied when trying to access the existing collection " + pathToCollection
+							+ ": " + pde.toString());
+		}
+		if (collection == null) {
 			throw new XPathException(new ErrorCode("exgit513", "Error acquiring a lock"),
 				"An error occurred while trying to acquire a lock for collection " 
-					+ collection.getURI().toString() + " : " + e3.getLocalizedMessage());
+					+ collection.getURI().toString());
 		}
 		// we should now have a target to import into
 		
@@ -686,7 +692,7 @@ public class GitFunctions extends BasicFunction {
 			}
 		}
 		
-		collection.getLock().release(LockMode.WRITE_LOCK);
+		collection.close();
 		return result;
 	}
 	
@@ -746,7 +752,7 @@ public class GitFunctions extends BasicFunction {
 		try {
 			documents = collection.iterator(context.getBroker());
 			subcollections = collection.collectionIterator(context.getBroker());
-			collection.getLock().acquire(LockMode.READ_LOCK);
+			collection.close();
 		} catch (PermissionDeniedException e) {
 			throw new XPathException(new ErrorCode("exgit201", "permission denied"),
 					"Access to the requested contents of collection " + collection.getURI().toString()
@@ -774,7 +780,7 @@ public class GitFunctions extends BasicFunction {
 					pathToCollection + "/" + coll.toString());
 		}
 		
-		collection.release(LockMode.READ_LOCK);
+		collection.close();
 		logger.info("Finished export of " + pathToCollection + " to " + pathToLocal);
 		
 		return true;
@@ -800,12 +806,12 @@ public class GitFunctions extends BasicFunction {
 				logger.info("exporting " + filename + " from " + coll + " to " + filePath.toString());
 				
 				collection = getCollection(coll);
-				DocumentImpl doc;
+				LockedDocument doc;
 				try {
 					doc = collection.getDocumentWithLock(context.getBroker(), XmldbURI.create(filename), LockMode.READ_LOCK);
-					writeFile(filePath, doc);
-					collection.releaseDocument(doc, LockMode.READ_LOCK);
-					collection.release(LockMode.READ_LOCK);
+					writeFile(filePath, doc.getDocument());
+					doc.close();
+					collection.close();
 				} catch (PermissionDeniedException e) {
 					throw new XPathException(new ErrorCode("exgit211", "Permission denied"),
 							"Permission denied reading " + file + " from " + pathToCollection + ".");
@@ -861,7 +867,7 @@ public class GitFunctions extends BasicFunction {
 					pathToCollection + "/" + coll.toString(), regex);
 		}
 		
-		collection.release(LockMode.READ_LOCK);
+		collection.close();
 //		logger.info(collection.getLock().toString());
 //		collection.release(LockMode.READ_LOCK);
 		logger.info("Finished export of " + pathToCollection + " to " + pathToLocal);
