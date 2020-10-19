@@ -42,6 +42,7 @@ import org.eclipse.jgit.internal.storage.dfs.DfsRepositoryDescription;
 import org.eclipse.jgit.internal.storage.dfs.InMemoryRepository;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectLoader;
+import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.RepositoryCache;
@@ -53,6 +54,8 @@ import org.eclipse.jgit.transport.PushResult;
 import org.eclipse.jgit.transport.RefSpec;
 import org.eclipse.jgit.transport.TagOpt;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.eclipse.jgit.treewalk.AbstractTreeIterator;
+import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.PathFilter;
 import org.eclipse.jgit.util.FS;
@@ -556,7 +559,7 @@ public class GitFunctions extends BasicFunction {
 			return (NodeValue) builder.getDocument().getDocumentElement();
 		}
 		case "memImport": {
-			String remote = args[0].toString();
+			String remoteRepoURI = args[0].toString();
 			String collection = args[1].toString();
 			
 			DfsRepositoryDescription repoDesc = new DfsRepositoryDescription();
@@ -566,14 +569,14 @@ public class GitFunctions extends BasicFunction {
 			
 			try {
 				git.fetch()
-				   .setRemote(remote)
+				   .setRemote(remoteRepoURI)
 				   .setRefSpecs(new RefSpec("+refs/heads/*:refs/heads/*"))
 				   .call();
 				repo.getObjectDatabase();
 				
 				ObjectId  lastCommitId = repo.resolve("refs/heads/master");
-				logger.info("Inspecting commit " + lastCommitId.toString() + " of repo " + remote);
 				RevWalk   revWalk      = new RevWalk(repo);
+				logger.info("Inspecting commit " + lastCommitId.toString() + " of repo " + remoteRepoURI);
 				
 				try {
 					
@@ -581,10 +584,34 @@ public class GitFunctions extends BasicFunction {
 					RevTree   revTree      = commit.getTree();
 					TreeWalk  treeWalk     = new TreeWalk(repo);
 					
-					List<String> files = lastCommitFiles(treeWalk, revTree, repo);
+					CloneCommand cc = Git.cloneRepository()
+							.setURI(remoteRepoURI);
+					cc.call();
+					// TODO use --depth 2 as soon as it is implemented in jgit
 					
-					for (int i = 0; i < files.size(); i++) {
-						result.add(new StringValue(files.get(i)));
+					/* get previous commit; https://stackoverflow.com/a/40094665/1652861 */
+					revWalk.markStart(commit);
+					RevCommit previous = null;
+					int count = 0;
+					for (RevCommit rev : revWalk) {
+						// got the previous commit.
+						if (count == 1) {
+							previous = rev;
+						}
+						count++;
+					}
+					
+					/* Get diff between current and previous commit; https://www.codeaffine.com/2016/06/16/jgit-diff/ */
+					AbstractTreeIterator oldTreeIterator = getCanonicalTreeParser(lastCommitId, git);
+					AbstractTreeIterator newTreeIterator = getCanonicalTreeParser(previous, git);
+					
+					List<DiffEntry> diffEntries = git.diff()
+							.setOldTree(oldTreeIterator)
+							.setNewTree(newTreeIterator)
+							.call();
+					for (int i = 0; i < diffEntries.size(); i++) {
+						// TODO evaluate OldPath, too, to see whether files were moved or deleted!
+						result.add(new StringValue(diffEntries.get(i).getNewPath()));
 					}
 				} finally {
 					revWalk.close();
@@ -594,10 +621,10 @@ public class GitFunctions extends BasicFunction {
 					"IO error memImporting " + repo + " into " + collection + ": " + e.getLocalizedMessage());
 			} catch (InvalidRemoteException e) {
 				throw new XPathException(new ErrorCode("exgit323", "Invalid remote"),
-						"Invalid remote when memImporting from " + remote + ": " + e.getLocalizedMessage());
+						"Invalid remote when memImporting from " + remoteRepoURI + ": " + e.getLocalizedMessage());
 			} catch (TransportException te) {
 				throw new XPathException(new ErrorCode("exgit324", "Transport Exception"),
-					"Transport error when pulling from " + remote + te.getLocalizedMessage());
+					"Transport error when pulling from " + remoteRepoURI + te.getLocalizedMessage());
 			} catch (GitAPIException e) {
 				throw new XPathException(new ErrorCode("exgit329", "Git API Error on memImport"),
 					"General error cloning " + repo + " into " + collection + ": " + e.getLocalizedMessage());
@@ -613,6 +640,17 @@ public class GitFunctions extends BasicFunction {
 		}
 		
 		return result;
+	}
+	
+	/* get previous commit; https://stackoverflow.com/a/40094665/1652861 */
+	private AbstractTreeIterator getCanonicalTreeParser(ObjectId commitId, Git git) throws IOException {
+	    try (RevWalk walk = new RevWalk(git.getRepository())) {
+	        RevCommit commit = walk.parseCommit(commitId);
+	        ObjectId treeId = commit.getTree().getId();
+	        try (ObjectReader reader = git.getRepository().newObjectReader()) {
+	            return new CanonicalTreeParser(null, reader, treeId);
+	        }
+	    }
 	}
 	
 	// exception codes 5xx
