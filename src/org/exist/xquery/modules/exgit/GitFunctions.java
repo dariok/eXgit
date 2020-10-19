@@ -13,9 +13,11 @@ import java.nio.file.Paths;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.input.BOMInputStream;
@@ -33,17 +35,26 @@ import org.eclipse.jgit.api.errors.RefNotFoundException;
 import org.eclipse.jgit.api.errors.TransportException;
 import org.eclipse.jgit.api.errors.UnmergedPathsException;
 import org.eclipse.jgit.api.errors.WrongRepositoryStateException;
+import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.dircache.DirCache;
 import org.eclipse.jgit.errors.RepositoryNotFoundException;
+import org.eclipse.jgit.internal.storage.dfs.DfsRepositoryDescription;
+import org.eclipse.jgit.internal.storage.dfs.InMemoryRepository;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectLoader;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.RepositoryCache;
 import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.PushResult;
+import org.eclipse.jgit.transport.RefSpec;
 import org.eclipse.jgit.transport.TagOpt;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.eclipse.jgit.treewalk.TreeWalk;
+import org.eclipse.jgit.treewalk.filter.PathFilter;
 import org.eclipse.jgit.util.FS;
 import org.exist.EXistException;
 import org.exist.collections.Collection;
@@ -220,7 +231,16 @@ public class GitFunctions extends BasicFunction {
 						new FunctionParameterSequenceType("regex", Type.STRING, Cardinality.EXACTLY_ONE,
 								"A regular expression to filter file names.")},
 				new FunctionReturnSequenceType(Type.BOOLEAN, Cardinality.EXACTLY_ONE,
-						"true if successful, false otherwise"))
+						"true if successful, false otherwise")),
+		new FunctionSignature(new QName("memImport", Exgit.NAMESPACE_URI, Exgit.PREFIX),
+				"Import last commit in master from $remote into $collection.",
+				new SequenceType[] {
+						new FunctionParameterSequenceType("remote", Type.STRING, Cardinality.EXACTLY_ONE,
+								"The full path to the remote git repository"),
+						new FunctionParameterSequenceType("collection", Type.STRING, Cardinality.EXACTLY_ONE,
+								"The collection to import to.")},
+				new FunctionReturnSequenceType(Type.STRING, Cardinality.ZERO_OR_MORE,
+						"the files that have been imported."))
 		};
 
 	public GitFunctions(XQueryContext context, FunctionSignature signature) {
@@ -534,6 +554,58 @@ public class GitFunctions extends BasicFunction {
 			builder.endDocument();
 			
 			return (NodeValue) builder.getDocument().getDocumentElement();
+		}
+		case "memImport": {
+			String remote = args[0].toString();
+			String collection = args[1].toString();
+			
+			DfsRepositoryDescription repoDesc = new DfsRepositoryDescription();
+			InMemoryRepository		 repo	  = new InMemoryRepository(repoDesc);
+			Git						 git	  = new Git(repo);
+			Logger 					 logger   = LogManager.getLogger();
+			
+			try {
+				git.fetch()
+				   .setRemote(remote)
+				   .setRefSpecs(new RefSpec("+refs/heads/*:refs/heads/*"))
+				   .call();
+				repo.getObjectDatabase();
+				
+				ObjectId  lastCommitId = repo.resolve("refs/heads/master");
+				logger.info("Inspecting commit " + lastCommitId.toString() + " of repo " + remote);
+				RevWalk   revWalk      = new RevWalk(repo);
+				
+				try {
+					
+					RevCommit commit       = revWalk.parseCommit(lastCommitId);
+					RevTree   revTree      = commit.getTree();
+					TreeWalk  treeWalk     = new TreeWalk(repo);
+					
+					List<String> files = lastCommitFiles(treeWalk, revTree, repo);
+					
+					for (int i = 0; i < files.size(); i++) {
+						result.add(new StringValue(files.get(i)));
+					}
+				} finally {
+					revWalk.close();
+				}
+			} catch (IOException e) {
+				throw new XPathException(new ErrorCode("exgit322", "IO Error on memImport"),
+					"IO error memImporting " + repo + " into " + collection + ": " + e.getLocalizedMessage());
+			} catch (InvalidRemoteException e) {
+				throw new XPathException(new ErrorCode("exgit323", "Invalid remote"),
+						"Invalid remote when memImporting from " + remote + ": " + e.getLocalizedMessage());
+			} catch (TransportException te) {
+				throw new XPathException(new ErrorCode("exgit324", "Transport Exception"),
+					"Transport error when pulling from " + remote + te.getLocalizedMessage());
+			} catch (GitAPIException e) {
+				throw new XPathException(new ErrorCode("exgit329", "Git API Error on memImport"),
+					"General error cloning " + repo + " into " + collection + ": " + e.getLocalizedMessage());
+			} finally {
+				git.close();
+			}
+			
+			break;
 		}
 		default:
 			throw new XPathException(new ErrorCode("exgit100", "function not found"),
@@ -1013,5 +1085,39 @@ public class GitFunctions extends BasicFunction {
 				"An I/O error occurred trying to check " + possibleGitRepo.getAbsolutePath() + ".");
 		}
 		return true;*/
+	}
+	
+	/* In-memory only solution to get files from a remote repo; https://stackoverflow.com/a/54486558/1652861 */
+	private ObjectLoader loadRemote(TreeWalk treeWalk, RevTree revTree, InMemoryRepository repo, String filename) throws Exception {
+		treeWalk.addTree(revTree);
+		treeWalk.setRecursive(true);
+		treeWalk.setFilter(PathFilter.create(filename));
+		
+		if (!treeWalk.next()) {
+			return null;
+		}
+		
+		ObjectId objectId = treeWalk.getObjectId(0);
+		ObjectLoader loader = repo.open(objectId);
+		return loader;
+	}
+	
+	private List<String> lastCommitFiles (TreeWalk treeWalk, RevTree revTree, InMemoryRepository repo) throws XPathException {
+		final List<String> paths = new ArrayList<>();
+		
+		try {
+			treeWalk.addTree(revTree);
+			treeWalk.setRecursive(true);
+			treeWalk.setPostOrderTraversal(true);
+			
+			while (treeWalk.next()) {
+				paths.add(treeWalk.getPathString());
+			}
+			
+			return paths;
+		} catch (IOException e) {
+			throw new XPathException(new ErrorCode("exgit900", "IOError for remote repo"),
+					"IO error accessing remote for in Memory repo");
+		}
 	}
 }
