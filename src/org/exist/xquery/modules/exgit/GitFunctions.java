@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.io.UnsupportedEncodingException;
 import java.io.Writer;
@@ -704,7 +705,7 @@ public class GitFunctions extends BasicFunction {
 					logger.info("Ingesting " + content.toString() + "; transaction " + transaction.getId());
 					try (FileInputStream fis = new FileInputStream(content.toFile()))
 					{
-						storeFileToCollection(fis);
+						result.add(storeFileToCollection(fis, collection, transaction, XmldbURI.create(name)));
 						
 					} catch (FileNotFoundException fnf) {
 						throw new XPathException(new ErrorCode("exgit550", "File not found ingesting"),
@@ -741,19 +742,30 @@ public class GitFunctions extends BasicFunction {
 		return result;
 	}
 	
-	private StringValue storeFileToCollection (InputStream stream, String filename) {
+	private StringValue storeFileToCollection (InputStream is, Collection collection, Txn transaction, XmldbURI filePath)
+			throws XPathException {
 		// Store XML and related file types
-		if (filename.matches(".*(xml|xsl|xconf|html)$")) {
-			BOMInputStream bis = new BOMInputStream(fis, false);
-			String daten = IOUtils.toString(bis, "UTF-8");
+		if (filePath.toString().matches(".*(xml|xsl|xconf|html)$")) {
+			BOMInputStream bis = new BOMInputStream(is, false);
+			
+			String daten;
+			try {
+				daten = IOUtils.toString(bis, "UTF-8");
+			} catch (IOException e) {
+				throw new XPathException(new ErrorCode("exgit552", "IO error converting input stream"),
+						"IO error converting input stream to UTF8-BOM for file " + filePath.toString() + ": "
+						+ e.getLocalizedMessage());
+			}
 			
 			try {
-				StringValue stored = storeXmlToCollection(collection, transaction, daten, filePath);
+				return storeXmlToCollection(collection, transaction, daten, filePath);
+				// TODO boolean: throw error when not valid or store as binary?
+			} catch (SAXException s) {
+				throw new XPathException(new ErrorCode("exgit608", "Validation error in XML file"),
+						"Validation error for file " + filePath.toString() + ": " + s.getLocalizedMessage());
 			}
-			// TODO boolean: throw error when not valid or store as binary?
-			
 		} else {
-			result.add(storeBinaryToCollection(collection, transaction, fis, content, name));
+			return storeBinaryToCollection(collection, transaction, is, filePath);
 		}
 		
 	}
@@ -790,7 +802,8 @@ public class GitFunctions extends BasicFunction {
 		return new StringValue(filePath.toString() + " -> " + collection.getURI().toString());
 	}
 	
-	private StringValue storeBinaryToCollection (Collection collection, Txn transaction, FileInputStream fis, XmldbURI filePath) throws XPathException {
+	private StringValue storeBinaryToCollection (Collection collection, Txn transaction, InputStream is, XmldbURI filePath)
+			throws XPathException {
 		BinaryDocument bin;
 		
 		try {
@@ -806,7 +819,7 @@ public class GitFunctions extends BasicFunction {
 		String mimeType = getMimeFromFilename(filePath);
 		
 		try {
-			collection.addBinaryResource(transaction, context.getBroker(), filePath, fis, mimeType, bin.getContentLength());
+			collection.addBinaryResource(transaction, context.getBroker(), filePath, is, mimeType, bin.getContentLength());
 		} catch (EXistException | SAXException | LockException | IOException e) {
 			throw new XPathException(new ErrorCode("exgit549", "General error storing binary file"),
 					"Error storing " + filePath.toString() + " into " + collection.getURI().toString()

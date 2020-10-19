@@ -162,6 +162,7 @@ let $co := exgit:checkout('/home/user/git/my-repo', 'refs/tags/my-tag')
 | 552 | I/O error when ingesting a file form directory |
 | **6xx** | **file validation errors** |
 | *60x* | *XML file validation errors* |
+| 608 | Validation error for XML file |
 | 609 | General error validating XML file |
 | *61x* | *binary file validation errors* |
 | 619 | General error validating binary file |
