@@ -105,7 +105,15 @@ let $co := exgit:checkout('/home/user/git/my-repo', 'refs/tags/my-tag')
 | 030 | No Repository<br>The given path exists, is not empty and not a valid git repository |
 | 032 | I/O error checking for repo<br>The given path exists, is non empty but an I/O error occurred trying to check whether it is a git repo |
 | | |
-| 1xx | function errors |
+| **1xx** | **collection errors** |
+| *10x* | *errors reading from a collection* |
+| 100 | collection not found |
+| 101 | permission denied reading from an existing collection |
+| *11x* | *errors creating a collection* |
+| 111 | Permission denied creating collection |
+| 119 | General error creating collection |
+| *12x* | *errors writing to a collection* |
+| 121 | Permission denied creating a write lock for collection |
 | 2xx | errors writing to disc |
 | | |
 | **3xx** | **errors raised by file operations on repositories** |

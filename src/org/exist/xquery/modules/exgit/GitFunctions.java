@@ -574,15 +574,15 @@ public class GitFunctions extends BasicFunction {
 				   .call();
 				repo.getObjectDatabase();
 				
-				ObjectId  lastCommitId = repo.resolve("refs/heads/master");
-				RevWalk   revWalk      = new RevWalk(repo);
+				ObjectId lastCommitId = repo.resolve("refs/heads/master");
+				RevWalk  revWalk      = new RevWalk(repo);
 				logger.info("Inspecting commit " + lastCommitId.toString() + " of repo " + remoteRepoURI);
 				
 				try {
 					
-					RevCommit commit       = revWalk.parseCommit(lastCommitId);
-					RevTree   revTree      = commit.getTree();
-					TreeWalk  treeWalk     = new TreeWalk(repo);
+					RevCommit commit   = revWalk.parseCommit(lastCommitId);
+					RevTree   revTree  = commit.getTree();
+					TreeWalk  treeWalk = new TreeWalk(repo);
 					
 					CloneCommand cc = Git.cloneRepository()
 							.setURI(remoteRepoURI);
@@ -668,46 +668,8 @@ public class GitFunctions extends BasicFunction {
 			throw new XPathException(new ErrorCode("exgit500", "Path not found trying to ingest"),
 					"Import could not find anything under " + pathToLocal + ".");
 		
-		XmldbURI uri = XmldbURI.create(pathToCollection);
+		Collection collection = getCollection(pathToCollection, LockMode.WRITE_LOCK);
 		
-		Collection collection;
-		try {
-			collection = context.getBroker().getCollection(uri);
-		} catch (PermissionDeniedException pde) {
-			throw new XPathException(new ErrorCode("exgit501", "Permission denied accessing collection"),
-				"Permission denied when trying to access the existing collection " + pathToCollection
-						+ ": " + pde.toString());
-		}
-		
-		if (collection == null) {
-			try (Txn collTransaction = BrokerPool.getInstance().getTransactionManager().beginTransaction()) {
-				collection = context.getBroker()
-						.getOrCreateCollection(collTransaction,
-								XmldbURI.create(pathToCollection));
-				context.getBroker().saveCollection(collTransaction, collection);
-				collTransaction.commit();
-			} catch (PermissionDeniedException pde) {
-				throw new XPathException(new ErrorCode("exgit511", "Permission denied creating collection"),
-						"Permission denied when trying to crate the collection " + pathToCollection
-								+ ": " + pde.toString());
-			} catch (Exception e) {
-				throw new XPathException(new ErrorCode("exgit519", "General error creating collection"),
-						"A genreal API error occurred when trying to crate the collection "
-								+ pathToCollection + ": " + e.toString());
-			}
-		}
-		collection.close();
-		try {
-			collection = context.getBroker().openCollection(uri, LockMode.WRITE_LOCK);
-		} catch (PermissionDeniedException pde) {
-			throw new XPathException(new ErrorCode("exgit501", "Permission denied accessing collection"),
-					"Permission denied when trying to access the existing collection " + pathToCollection
-							+ ": " + pde.toString());
-		}
-		if (collection == null) {
-			throw new XPathException(new ErrorCode("exgit513", "Error acquiring a lock"),
-				"An error occurred while trying to acquire a lock for collection " + pathToCollection);
-		}
 		// we should now have a target to import into
 		
 		Iterator<Path> contents;
@@ -766,7 +728,7 @@ public class GitFunctions extends BasicFunction {
 							} catch (PermissionDeniedException pde) {
 								throw new XPathException(new ErrorCode("exgit531", "Permission denied"),
 									"Permission denied storing " + content.toString() + " into " 
-										+ uri + ": " + pde.getLocalizedMessage());
+										+ collectionURI + ": " + pde.getLocalizedMessage());
 							} catch (Exception e) {
 								throw new XPathException(new ErrorCode("exgit539b", "General error storing XML file"),
 									"A genereal error has occurred trying to store" + content.toString()
@@ -859,7 +821,7 @@ public class GitFunctions extends BasicFunction {
 	/* error codes 2xy */
 	private boolean writeCollectionToDisk(String pathToLocal, String pathToCollection) throws XPathException {
 		Path repo = getDir(pathToLocal);
-		org.exist.collections.Collection collection = getCollection(pathToCollection);
+		Collection collection = getCollection(pathToCollection, LockMode.READ_LOCK);
 		
 		Iterator<DocumentImpl> documents;
 		Iterator<XmldbURI> subcollections;
@@ -919,7 +881,7 @@ public class GitFunctions extends BasicFunction {
 				Logger logger = LogManager.getLogger();
 				logger.info("exporting " + filename + " from " + coll + " to " + filePath.toString());
 				
-				collection = getCollection(coll);
+				collection = getCollection(coll, LockMode.READ_LOCK);
 				LockedDocument doc;
 				try {
 					doc = collection.getDocumentWithLock(context.getBroker(), XmldbURI.create(filename), LockMode.READ_LOCK);
@@ -944,7 +906,7 @@ public class GitFunctions extends BasicFunction {
 	
 	private boolean writeFilesFiltered (String pathToLocal, String pathToCollection, String regex) throws XPathException {
 		Path repo = getDir(pathToLocal);
-		org.exist.collections.Collection collection = getCollection(pathToCollection);
+		org.exist.collections.Collection collection = getCollection(pathToCollection, LockMode.READ_LOCK);
 		
 		Iterator<DocumentImpl> documents;
 		Iterator<XmldbURI> subcollections;
@@ -1046,18 +1008,50 @@ public class GitFunctions extends BasicFunction {
 	}
 	
 	/* exception codes 11x */
-	private org.exist.collections.Collection getCollection(String pathToCollection) throws XPathException {
-		org.exist.collections.Collection collection;
+	private Collection getCollection(String pathToCollection, LockMode mode) throws XPathException {
+		Collection collection;
+		XmldbURI collectionURI = XmldbURI.create(pathToCollection);
 		
+		// Make sure a collection exists and is readable
 		try {
-			collection = context.getBroker().openCollection(XmldbURI.create(pathToCollection), LockMode.READ_LOCK);
-		} catch (PermissionDeniedException e) {
-			throw new XPathException(new ErrorCode("exgit111", "permission denied"),
-					"Access to the requested collection " + pathToCollection + " was denied.");
+			collection = context.getBroker().getCollection(collectionURI);
+		} catch (PermissionDeniedException pde) {
+			throw new XPathException(new ErrorCode("exgit101", "Permission denied reading collection"),
+				"Permission denied when trying to read from the existing collection " + pathToCollection
+						+ ": " + pde.toString());
+		}
+		
+		// when trying to write, create the collection if necessary
+		if (collection == null && mode == LockMode.WRITE_LOCK) {
+			try (Txn collTransaction = BrokerPool.getInstance().getTransactionManager().beginTransaction()) {
+				collection = context.getBroker()
+									.getOrCreateCollection(collTransaction, collectionURI);
+				context.getBroker().saveCollection(collTransaction, collection);
+				collTransaction.commit();
+			} catch (PermissionDeniedException pde) {
+				throw new XPathException(new ErrorCode("exgit111", "Permission denied creating collection"),
+						"Permission denied when trying to crate the collection " + pathToCollection
+								+ ": " + pde.toString());
+			} catch (Exception e) {
+				throw new XPathException(new ErrorCode("exgit119", "General error creating collection"),
+						"A genreal API error occurred when trying to crate the collection "
+								+ pathToCollection + ": " + e.toString());
+			}
+		}
+		collection.close();
+		
+		// open collection
+		try {
+			collection = context.getBroker().openCollection(collectionURI, mode);
+		} catch (PermissionDeniedException pde) {
+			String errorCode = mode == LockMode.WRITE_LOCK ? "exgit121" : "exgit 101";
+			throw new XPathException(new ErrorCode(errorCode, "Permission denied accessing collection"),
+					"Permission denied when trying to access the existing collection " + pathToCollection
+							+ ": " + pde.toString());
 		}
 		
 		if (collection == null) {
-			throw new XPathException(new ErrorCode("exgit111", "collection not found"),
+			throw new XPathException(new ErrorCode("exgit100", "collection not found"),
 					"The requested collection " + pathToCollection + " was not found.");
 		}
 		
