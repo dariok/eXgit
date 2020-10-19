@@ -152,13 +152,11 @@ let $co := exgit:checkout('/home/user/git/my-repo', 'refs/tags/my-tag')
 | 513 | Error acquiring an exclusive lock to the specified collection |
 | 519 | General error trying to create the specified collection |
 | 522 | I/O error reading from the specified input path |
-| *53x* | *errors writing files to collection* |
+| *53x* | *errors writing XML files to collection* |
 | 531 | Permission denied writing XML file to collection |
-| 533 | Validation error for XML file |
 | 539 | A general error has occurred trying to store an XML file |
-| 541 | Permission denied validating or writing binary file |
-| 542 | I/O error validating binary file
-| 543 | Validation or lock error when trying to vlaidate binary file |
+| *54x* | *errors writing binary files to collection* |
+| 541 | Permission denied writing binary file to collection |
 | 549 | General error trying to store a binary file
 | 550 | File not found in directory when ingesting a file |
 | 552 | I/O error when ingesting a file form directory |
@@ -166,6 +164,7 @@ let $co := exgit:checkout('/home/user/git/my-repo', 'refs/tags/my-tag')
 | *60x* | *XML file validation errors* |
 | 609 | General error validating XML file |
 | *61x* | *binary file validation errors* |
+| 619 | General error validating binary file |
 
 ## Caveats and future
 Currently, HTTP is used as transport and the user credentials have to be supplied within the XQuery.
