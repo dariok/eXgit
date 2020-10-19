@@ -611,7 +611,12 @@ public class GitFunctions extends BasicFunction {
 							.call();
 					for (int i = 0; i < diffEntries.size(); i++) {
 						// TODO evaluate OldPath, too, to see whether files were moved or deleted!
-						result.add(new StringValue(diffEntries.get(i).getNewPath()));
+						String filename = diffEntries.get(i).getNewPath();
+						result.add(new StringValue(filename));
+						
+						ObjectLoader loader = loadRemote(treeWalk, revTree, repo, filename);
+						byte[] content = loader.getBytes();
+						
 					}
 				} finally {
 					revWalk.close();
@@ -1126,17 +1131,33 @@ public class GitFunctions extends BasicFunction {
 	}
 	
 	/* In-memory only solution to get files from a remote repo; https://stackoverflow.com/a/54486558/1652861 */
-	private ObjectLoader loadRemote(TreeWalk treeWalk, RevTree revTree, InMemoryRepository repo, String filename) throws Exception {
-		treeWalk.addTree(revTree);
+	private ObjectLoader loadRemote(TreeWalk treeWalk, RevTree revTree, InMemoryRepository repo, String filename) {
+		try {
+			treeWalk.addTree(revTree);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		treeWalk.setRecursive(true);
 		treeWalk.setFilter(PathFilter.create(filename));
 		
-		if (!treeWalk.next()) {
-			return null;
+		try {
+			if (!treeWalk.next()) {
+				return null;
+			}
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
 		}
 		
 		ObjectId objectId = treeWalk.getObjectId(0);
-		ObjectLoader loader = repo.open(objectId);
+		ObjectLoader loader;
+		try {
+			loader = repo.open(objectId);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		return loader;
 	}
 	
