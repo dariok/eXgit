@@ -43,6 +43,7 @@ import org.eclipse.jgit.internal.storage.dfs.InMemoryRepository;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectLoader;
 import org.eclipse.jgit.lib.ObjectReader;
+import org.eclipse.jgit.lib.ObjectStream;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.RepositoryCache;
@@ -615,7 +616,9 @@ public class GitFunctions extends BasicFunction {
 						result.add(new StringValue(filename));
 						
 						ObjectLoader loader = loadRemote(treeWalk, revTree, repo, filename);
-						byte[] content = loader.getBytes();
+						ObjectStream fileStream = loader.openStream();
+						
+						fileStream.close();
 						
 					}
 				} finally {
@@ -700,43 +703,8 @@ public class GitFunctions extends BasicFunction {
 					logger.info("Ingesting " + content.toString() + "; transaction " + transaction.getId());
 					try (FileInputStream fis = new FileInputStream(content.toFile()))
 					{
-						// TODO ggf. filter übergeben lassen?
-						if (content.toString().matches(".*(xml|xsl|xconf|html)$")) {
-							BOMInputStream bis = new BOMInputStream(fis, false);
-							String daten = IOUtils.toString(bis, "UTF-8");
-							
-							IndexInfo info = null;
-							try {
-								info = collection.validateXMLResource(transaction, context.getBroker(),
-									XmldbURI.create(name), daten);
-							} catch (SAXException s) {
-								logger.info("XML file " + content.toString() + " is not valid; retrying as binary");
-								storeBinaryToCollection(collection, transaction, fis, content, name);
-								continue;
-								/*throw new XPathException(new ErrorCode("exgit533", "Validation error for XML file"),
-									"Validation error for XML file " + content.toString() + ": "
-										+ s.getLocalizedMessage());*/
-							} catch (Exception e) {
-								throw new XPathException(new ErrorCode("exgit539a", "General error validating XML file"),
-									"A genereal error has occurred trying to validate" + content.toString()
-										+ ": " + e.getLocalizedMessage());
-							}
-							
-							try {
-								collection.store(transaction, context.getBroker(), info, daten);
-								result.add(new StringValue(content.toString() + " -> " + collection.getURI().toString()));
-							} catch (PermissionDeniedException pde) {
-								throw new XPathException(new ErrorCode("exgit531", "Permission denied"),
-									"Permission denied storing " + content.toString() + " into " 
-										+ collectionURI + ": " + pde.getLocalizedMessage());
-							} catch (Exception e) {
-								throw new XPathException(new ErrorCode("exgit539b", "General error storing XML file"),
-									"A genereal error has occurred trying to store" + content.toString()
-									+ ": " + e.getLocalizedMessage());
-							}
-						} else {
-							result.add(storeBinaryToCollection(collection, transaction, fis, content, name));
-						}
+						storeFileToCollection(fis);
+						
 					} catch (FileNotFoundException fnf) {
 						throw new XPathException(new ErrorCode("exgit550", "File not found ingesting"),
 							"File not found trying to store " + content.toString() + " into " 
@@ -770,6 +738,56 @@ public class GitFunctions extends BasicFunction {
 		
 		collection.close();
 		return result;
+	}
+	
+	private StringValue storeFileToCollection (InputStream stream, String filename) {
+		// Store XML and related file types
+		if (filename.matches(".*(xml|xsl|xconf|html)$")) {
+			BOMInputStream bis = new BOMInputStream(fis, false);
+			String daten = IOUtils.toString(bis, "UTF-8");
+			
+			try {
+				StringValue stored = storeXmlToCollection(collection, transaction, daten, filePath);
+			}
+			// TODO boolean: throw error when not valid or store as binary?
+			
+		} else {
+			result.add(storeBinaryToCollection(collection, transaction, fis, content, name));
+		}
+		
+	}
+	
+	private StringValue storeXmlToCollection (Collection collection, Txn transaction, String daten, XmldbURI filePath)
+			throws XPathException, SAXException {
+		IndexInfo info   = null;
+		
+		// Validate XML – returns IndexInfo necessary for storing
+		try {
+			info = collection.validateXMLResource(transaction, context.getBroker(), filePath, daten);
+		} catch (PermissionDeniedException pde) {
+			throw new XPathException(new ErrorCode("exgit121", "Permission denied"),
+					"Permission denied creating a write lock validating " + filePath.toString() + " for collection " 
+						+ collection.getURI().toString() + ": " + pde.getLocalizedMessage());
+		} catch (Exception e) {
+			throw new XPathException(new ErrorCode("exgit609", "General error validating XML file"),
+				"A general error has occurred trying to validate" + filePath.toString()
+					+ ": " + e.getLocalizedMessage());
+		}
+		
+		// Store XML file to collection (info contains necessary information) 
+		try {
+			collection.store(transaction, context.getBroker(), info, daten);
+		} catch (PermissionDeniedException pde) {
+			throw new XPathException(new ErrorCode("exgit531", "Permission denied"),
+				"Permission denied storing " + filePath.toString() + " into " 
+					+ collection.getURI().toString() + ": " + pde.getLocalizedMessage());
+		} catch (Exception e) {
+			throw new XPathException(new ErrorCode("exgit539", "General error storing XML file"),
+				"A genereal error has occurred trying to store" + filePath.toString() + " into "
+					+ collection.getURI().toString() + ": " + e.getLocalizedMessage());
+		}
+		
+		return new StringValue(filePath.toString() + " -> " + collection.getURI().toString());
 	}
 	
 	private StringValue storeBinaryToCollection (Collection collection, Txn transaction, FileInputStream fis,
