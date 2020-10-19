@@ -470,7 +470,7 @@ public class GitFunctions extends BasicFunction {
 		}
 			break;
 		case "import":
-			result.addAll(readCollectionFromDisk(args[0].toString(), args[1].toString()));
+			result.addAll(importCollectionFromDisk(args[0].toString(), args[1].toString()));
 			break;
 		case "tags":
 		{
@@ -649,17 +649,17 @@ public class GitFunctions extends BasicFunction {
 	
 	/* get previous commit; https://stackoverflow.com/a/40094665/1652861 */
 	private AbstractTreeIterator getCanonicalTreeParser(ObjectId commitId, Git git) throws IOException {
-	    try (RevWalk walk = new RevWalk(git.getRepository())) {
-	        RevCommit commit = walk.parseCommit(commitId);
-	        ObjectId treeId = commit.getTree().getId();
-	        try (ObjectReader reader = git.getRepository().newObjectReader()) {
-	            return new CanonicalTreeParser(null, reader, treeId);
-	        }
-	    }
+		try (RevWalk walk = new RevWalk(git.getRepository())) {
+			RevCommit commit = walk.parseCommit(commitId);
+			ObjectId treeId = commit.getTree().getId();
+			try (ObjectReader reader = git.getRepository().newObjectReader()) {
+				return new CanonicalTreeParser(null, reader, treeId);
+			}
+		}
 	}
 	
 	// exception codes 5xx
-	private ValueSequence readCollectionFromDisk (String pathToLocal, String pathToCollection) throws XPathException {
+	private ValueSequence importCollectionFromDisk (String pathToLocal, String pathToCollection) throws XPathException {
 		Logger logger = LogManager.getLogger();
 		
 		Path repo = Paths.get(pathToLocal);
@@ -706,8 +706,7 @@ public class GitFunctions extends BasicFunction {
 		}
 		if (collection == null) {
 			throw new XPathException(new ErrorCode("exgit513", "Error acquiring a lock"),
-				"An error occurred while trying to acquire a lock for collection " 
-					+ collection.getURI().toString());
+				"An error occurred while trying to acquire a lock for collection " + pathToCollection);
 		}
 		// we should now have a target to import into
 		
@@ -734,7 +733,7 @@ public class GitFunctions extends BasicFunction {
 				if (name.startsWith(".")) continue;
 				
 				if (Files.isDirectory(content)) {
-					result.addAll(readCollectionFromDisk(content.toString(), pathToCollection + "/" + name));
+					result.addAll(importCollectionFromDisk(content.toString(), pathToCollection + "/" + name));
 				} else {
 					logger.info("Ingesting " + content.toString() + "; transaction " + transaction.getId());
 					try (FileInputStream fis = new FileInputStream(content.toFile()))
@@ -750,7 +749,7 @@ public class GitFunctions extends BasicFunction {
 									XmldbURI.create(name), daten);
 							} catch (SAXException s) {
 								logger.info("XML file " + content.toString() + " is not valid; retrying as binary");
-								addBinary(collection, transaction, fis, content, name);
+								storeBinaryToCollection(collection, transaction, fis, content, name);
 								continue;
 								/*throw new XPathException(new ErrorCode("exgit533", "Validation error for XML file"),
 									"Validation error for XML file " + content.toString() + ": "
@@ -774,7 +773,7 @@ public class GitFunctions extends BasicFunction {
 									+ ": " + e.getLocalizedMessage());
 							}
 						} else {
-							result.add(addBinary(collection, transaction, fis, content, name));
+							result.add(storeBinaryToCollection(collection, transaction, fis, content, name));
 						}
 					} catch (FileNotFoundException fnf) {
 						throw new XPathException(new ErrorCode("exgit550", "File not found ingesting"),
@@ -811,7 +810,7 @@ public class GitFunctions extends BasicFunction {
 		return result;
 	}
 	
-	private StringValue addBinary(Collection collection, Txn transaction, FileInputStream fis,
+	private StringValue storeBinaryToCollection (Collection collection, Txn transaction, FileInputStream fis,
 			Path content, String name) throws XPathException {
 		BinaryDocument bin;
 		
@@ -885,7 +884,7 @@ public class GitFunctions extends BasicFunction {
 			
 			Path filePath = Paths.get(repo.toString(), doc.getFileURI().toString());
 			
-			writeFile(filePath, doc);
+			writeSingleFileToDisk(filePath, doc);
 		}
 		
 		while (subcollections.hasNext()) {
@@ -924,7 +923,7 @@ public class GitFunctions extends BasicFunction {
 				LockedDocument doc;
 				try {
 					doc = collection.getDocumentWithLock(context.getBroker(), XmldbURI.create(filename), LockMode.READ_LOCK);
-					writeFile(filePath, doc.getDocument());
+					writeSingleFileToDisk(filePath, doc.getDocument());
 					doc.close();
 					collection.close();
 				} catch (PermissionDeniedException e) {
@@ -971,7 +970,7 @@ public class GitFunctions extends BasicFunction {
 			Path filePath = Paths.get(repo.toString(), doc.getFileURI().toString());
 			
 			if (filePath.toString().matches(regex)) {
-				writeFile(filePath, doc);
+				writeSingleFileToDisk(filePath, doc);
 			}
 		}
 		
@@ -990,7 +989,7 @@ public class GitFunctions extends BasicFunction {
 		return true;
 	}
 	
-	private void writeFile(Path filePath, DocumentImpl doc) throws XPathException {
+	private void writeSingleFileToDisk (Path filePath, DocumentImpl doc) throws XPathException {
 		Serializer serializer = context.getBroker().getSerializer();
 		Writer writer;
 		
