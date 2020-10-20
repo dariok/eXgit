@@ -38,7 +38,6 @@ import org.eclipse.jgit.api.errors.UnmergedPathsException;
 import org.eclipse.jgit.api.errors.WrongRepositoryStateException;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.dircache.DirCache;
-import org.eclipse.jgit.errors.RepositoryNotFoundException;
 import org.eclipse.jgit.internal.storage.dfs.DfsRepositoryDescription;
 import org.eclipse.jgit.internal.storage.dfs.InMemoryRepository;
 import org.eclipse.jgit.lib.ObjectId;
@@ -47,7 +46,6 @@ import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.ObjectStream;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
-import org.eclipse.jgit.lib.RepositoryCache;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.revwalk.RevWalk;
@@ -60,11 +58,9 @@ import org.eclipse.jgit.treewalk.AbstractTreeIterator;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.PathFilter;
-import org.eclipse.jgit.util.FS;
 import org.exist.EXistException;
 import org.exist.collections.Collection;
 import org.exist.collections.IndexInfo;
-import org.exist.collections.triggers.TriggerException;
 import org.exist.dom.QName;
 import org.exist.dom.memtree.MemTreeBuilder;
 import org.exist.dom.persistent.BinaryDocument;
@@ -563,7 +559,7 @@ public class GitFunctions extends BasicFunction {
 		}
 		case "memImport": {
 			String remoteRepoURI = args[0].toString();
-			String collection = args[1].toString();
+			String pathToCollection = args[1].toString();
 			
 			DfsRepositoryDescription repoDesc = new DfsRepositoryDescription();
 			InMemoryRepository		 repo	  = new InMemoryRepository(repoDesc);
@@ -615,20 +611,41 @@ public class GitFunctions extends BasicFunction {
 					for (int i = 0; i < diffEntries.size(); i++) {
 						// TODO evaluate OldPath, too, to see whether files were moved or deleted!
 						String filename = diffEntries.get(i).getNewPath();
-						result.add(new StringValue(filename));
 						
 						ObjectLoader loader = loadRemote(treeWalk, revTree, repo, filename);
 						ObjectStream fileStream = loader.openStream();
 						
-						fileStream.close();
+						Collection collection = getCollection(pathToCollection, LockMode.WRITE_LOCK);
+						Txn transaction = null;
+						try {
+							transaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
+							result.add(storeFileToCollection(fileStream, collection, transaction, XmldbURI.create(filename)));
+							transaction.commit();
+						} catch (EXistException e) {
+							throw new XPathException(new ErrorCode("exgit559", "Exist error creating a transaction"),
+									"An error occurred creating a transaction for storing into " 
+										+ collection.getURI().toString() + " : " + e.getLocalizedMessage());
+						} finally {
+							if (transaction != null) {
+								if (transaction.getState() != Txn.State.COMMITTED) {
+									logger.warn("An error occurred importing " + repo.toString()
+										+ "; aborting transaction " + transaction.getId()); 
+									transaction.abort();
+								}
+								
+								logger.info("closing transaction " + transaction.getId());
+								transaction.close();
+							}
+						}
 						
+						fileStream.close();
 					}
 				} finally {
 					revWalk.close();
 				}
 			} catch (IOException e) {
 				throw new XPathException(new ErrorCode("exgit322", "IO Error on memImport"),
-					"IO error memImporting " + repo + " into " + collection + ": " + e.getLocalizedMessage());
+					"IO error memImporting " + repo + " into " + pathToCollection + ": " + e.getLocalizedMessage());
 			} catch (InvalidRemoteException e) {
 				throw new XPathException(new ErrorCode("exgit323", "Invalid remote"),
 						"Invalid remote when memImporting from " + remoteRepoURI + ": " + e.getLocalizedMessage());
@@ -637,7 +654,7 @@ public class GitFunctions extends BasicFunction {
 					"Transport error when pulling from " + remoteRepoURI + te.getLocalizedMessage());
 			} catch (GitAPIException e) {
 				throw new XPathException(new ErrorCode("exgit329", "Git API Error on memImport"),
-					"General error cloning " + repo + " into " + collection + ": " + e.getLocalizedMessage());
+					"General error cloning " + repo + " into " + pathToCollection + ": " + e.getLocalizedMessage());
 			} finally {
 				git.close();
 			}
@@ -723,7 +740,7 @@ public class GitFunctions extends BasicFunction {
 			logger.info("Finished importing " + repo.toString() + "; transaction " + transaction.getId());
 		} catch (EXistException e3) {
 			throw new XPathException(new ErrorCode("exgit559", "Exist error creating a transaction"),
-					"TAn error occurred creating a transaction for storing into " 
+					"An error occurred creating a transaction for storing into " 
 						+ collection.getURI().toString() + " : " + e3.getLocalizedMessage());
 		} finally {
 			if (transaction != null) {
@@ -1175,7 +1192,7 @@ public class GitFunctions extends BasicFunction {
 		}
 		
 		ObjectId objectId = treeWalk.getObjectId(0);
-		ObjectLoader loader;
+		ObjectLoader loader = null;
 		try {
 			loader = repo.open(objectId);
 		} catch (IOException e) {
@@ -1183,24 +1200,5 @@ public class GitFunctions extends BasicFunction {
 			e.printStackTrace();
 		}
 		return loader;
-	}
-	
-	private List<String> lastCommitFiles (TreeWalk treeWalk, RevTree revTree, InMemoryRepository repo) throws XPathException {
-		final List<String> paths = new ArrayList<>();
-		
-		try {
-			treeWalk.addTree(revTree);
-			treeWalk.setRecursive(true);
-			treeWalk.setPostOrderTraversal(true);
-			
-			while (treeWalk.next()) {
-				paths.add(treeWalk.getPathString());
-			}
-			
-			return paths;
-		} catch (IOException e) {
-			throw new XPathException(new ErrorCode("exgit900", "IOError for remote repo"),
-					"IO error accessing remote for in Memory repo");
-		}
 	}
 }
