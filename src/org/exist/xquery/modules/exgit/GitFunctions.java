@@ -68,7 +68,10 @@ import org.exist.dom.persistent.DocumentImpl;
 import org.exist.dom.persistent.LockedDocument;
 import org.exist.security.PermissionDeniedException;
 import org.exist.storage.BrokerPool;
+import org.exist.storage.lock.FileLock;
+import org.exist.storage.lock.Lock;
 import org.exist.storage.lock.Lock.LockMode;
+import org.exist.storage.lock.ManagedDocumentLock;
 import org.exist.storage.serializers.Serializer;
 import org.exist.storage.txn.Txn;
 import org.exist.util.LockException;
@@ -90,6 +93,8 @@ import org.exist.xquery.value.StringValue;
 import org.exist.xquery.value.Type;
 import org.exist.xquery.value.ValueSequence;
 import org.xml.sax.SAXException;
+
+import com.evolvedbinary.j8fu.function.SupplierE;
 
 
 public class GitFunctions extends BasicFunction {
@@ -561,12 +566,12 @@ public class GitFunctions extends BasicFunction {
 			String remoteRepoURI = args[0].toString();
 			String pathToCollection = args[1].toString();
 			
-			DfsRepositoryDescription repoDesc = new DfsRepositoryDescription();
-			InMemoryRepository		 repo	  = new InMemoryRepository(repoDesc);
-			Git						 git	  = new Git(repo);
-			Logger 					 logger   = LogManager.getLogger();
+			DfsRepositoryDescription repoDesc   = new DfsRepositoryDescription();
+			InMemoryRepository		 repo	    = new InMemoryRepository(repoDesc);
+			Git						 git	    = new Git(repo);
+			Logger 					 logger     = LogManager.getLogger();
 			
-			try {
+			try (Collection collection = getCollection(pathToCollection, LockMode.WRITE_LOCK)) {
 				git.fetch()
 				   .setRemote(remoteRepoURI)
 				   .setRefSpecs(new RefSpec("+refs/heads/*:refs/heads/*"))
@@ -577,16 +582,21 @@ public class GitFunctions extends BasicFunction {
 				RevWalk  revWalk      = new RevWalk(repo);
 				logger.info("Inspecting commit " + lastCommitId.toString() + " of repo " + remoteRepoURI);
 				
+				
 				try {
 					
 					RevCommit commit   = revWalk.parseCommit(lastCommitId);
 					RevTree   revTree  = commit.getTree();
 					TreeWalk  treeWalk = new TreeWalk(repo);
 					
-					CloneCommand cc = Git.cloneRepository()
-							.setURI(remoteRepoURI);
-					cc.call();
-					// TODO use --depth 2 as soon as it is implemented in jgit
+					if (repo.exists()) {
+						git.pull();
+					} else {
+						CloneCommand cc = Git.cloneRepository()
+								.setURI(remoteRepoURI);
+						cc.call();
+						// TODO use --depth 2 as soon as it is implemented in jgit
+					}
 					
 					/* get previous commit; https://stackoverflow.com/a/40094665/1652861 */
 					revWalk.markStart(commit);
@@ -615,11 +625,13 @@ public class GitFunctions extends BasicFunction {
 						ObjectLoader loader = loadRemote(treeWalk, revTree, repo, filename);
 						ObjectStream fileStream = loader.openStream();
 						
-						Collection collection = getCollection(pathToCollection, LockMode.WRITE_LOCK);
 						Txn transaction = null;
 						try {
 							transaction = BrokerPool.getInstance().getTransactionManager().beginTransaction();
+							
+							logger.info("Ingesting " + filename + " to " + pathToCollection + "; transaction " + transaction.getId());
 							result.add(storeFileToCollection(fileStream, collection, transaction, XmldbURI.create(filename)));
+							
 							transaction.commit();
 						} catch (EXistException e) {
 							throw new XPathException(new ErrorCode("exgit559", "Exist error creating a transaction"),
@@ -633,7 +645,7 @@ public class GitFunctions extends BasicFunction {
 									transaction.abort();
 								}
 								
-								logger.info("closing transaction " + transaction.getId());
+								logger.info("closing transaction " + transaction.getId() + "; " + transaction.getState().toString());
 								transaction.close();
 							}
 						}
@@ -787,13 +799,14 @@ public class GitFunctions extends BasicFunction {
 		
 	}
 	
-	private StringValue storeXmlToCollection (Collection collection, Txn transaction, String daten, XmldbURI filePath)
+	private StringValue storeXmlToCollection (Collection collection, Txn transaction, String data, XmldbURI filePath)
 			throws XPathException, SAXException {
 		IndexInfo info   = null;
+		Logger logger = LogManager.getLogger();
 		
 		// Validate XML – returns IndexInfo necessary for storing
 		try {
-			info = collection.validateXMLResource(transaction, context.getBroker(), filePath, daten);
+			info = collection.validateXMLResource(transaction, context.getBroker(), filePallth, data);
 		} catch (PermissionDeniedException pde) {
 			throw new XPathException(new ErrorCode("exgit121", "Write lock error"),
 					"Error creating a write lock validating " + filePath.toString() + " for collection " 
@@ -802,10 +815,11 @@ public class GitFunctions extends BasicFunction {
 			throw new XPathException(new ErrorCode("exgit609", "General error validating XML file"),
 				"General error trying to validate" + filePath.toString() + ": " + e.getLocalizedMessage());
 		}
-		
+		logger.info(info.isCreating());
+		logger.info(data.length());
 		// Store XML file to collection (info contains necessary information) 
 		try {
-			collection.store(transaction, context.getBroker(), info, daten);
+			collection.store(transaction, context.getBroker(), info, data);
 		} catch (PermissionDeniedException pde) {
 			throw new XPathException(new ErrorCode("exgit531", "Permission denied"),
 				"Permission denied storing " + filePath.toString() + " into " 
@@ -1069,7 +1083,7 @@ public class GitFunctions extends BasicFunction {
 						+ ": " + pde.toString());
 		}
 		
-		// when trying to write, create the collection if necessary
+		/*// when trying to write, create the collection if necessary
 		if (collection == null && mode == LockMode.WRITE_LOCK) {
 			try (Txn collTransaction = BrokerPool.getInstance().getTransactionManager().beginTransaction()) {
 				collection = context.getBroker()
@@ -1086,7 +1100,11 @@ public class GitFunctions extends BasicFunction {
 								+ pathToCollection + ": " + e.toString());
 			}
 		}
-		collection.close();
+		collection.close();*/
+		if (collection == null) {
+			throw new XPathException(new ErrorCode("exgit100", "Collection not found"),
+					"Collection " + pathToCollection + " not found.");
+		}
 		
 		// open collection
 		try {
