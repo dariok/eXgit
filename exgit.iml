@@ -95,8 +95,8 @@
     <orderEntry type="library" scope="PROVIDED" name="Maven: org.eclipse.jetty:jetty-servlet:9.4.26.v20200117" level="project" />
     <orderEntry type="library" scope="PROVIDED" name="Maven: org.eclipse.jetty:jetty-webapp:9.4.26.v20200117" level="project" />
     <orderEntry type="library" scope="PROVIDED" name="Maven: org.eclipse.jetty:jetty-xml:9.4.26.v20200117" level="project" />
-    <orderEntry type="library" name="Maven: org.eclipse.jgit:org.eclipse.jgit:5.9.0.202009080501-r" level="project" />
-    <orderEntry type="library" name="Maven: com.googlecode.javaewah:JavaEWAH:1.1.7" level="project" />
-    <orderEntry type="library" name="Maven: org.slf4j:slf4j-api:1.7.2" level="project" />
+    <orderEntry type="library" name="Maven: org.eclipse.jgit:org.eclipse.jgit:5.13.0.202109080827-r" level="project" />
+    <orderEntry type="library" name="Maven: com.googlecode.javaewah:JavaEWAH:1.1.12" level="project" />
+    <orderEntry type="library" name="Maven: org.slf4j:slf4j-api:1.7.30" level="project" />
   </component>
 </module>
