@@ -806,7 +806,7 @@ public class GitFunctions extends BasicFunction {
 		
 		// Validate XML – returns IndexInfo necessary for storing
 		try {
-			info = collection.validateXMLResource(transaction, context.getBroker(), filePallth, data);
+			info = collection.validateXMLResource(transaction, context.getBroker(), filePath, data);
 		} catch (PermissionDeniedException pde) {
 			throw new XPathException(new ErrorCode("exgit121", "Write lock error"),
 					"Error creating a write lock validating " + filePath.toString() + " for collection " 
