@@ -26,6 +26,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.jgit.api.CloneCommand;
 import org.eclipse.jgit.api.CommitCommand;
+import org.eclipse.jgit.api.DescribeCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.Status;
@@ -247,7 +248,15 @@ public class GitFunctions extends BasicFunction {
 						new FunctionParameterSequenceType("collection", Type.STRING, Cardinality.EXACTLY_ONE,
 								"The collection to import to.")},
 				new FunctionReturnSequenceType(Type.STRING, Cardinality.ZERO_OR_MORE,
-						"the files that have been imported."))
+						"the files that have been imported.")),
+		new FunctionSignature(new QName("describe", Exgit.NAMESPACE_URI, Exgit.PREFIX),
+		        "Get revision description",
+				new SequenceType[] {
+						new FunctionParameterSequenceType("repoDir", Type.STRING, Cardinality.EXACTLY_ONE,
+								"The full path to the local git repository")
+				},
+				new FunctionReturnSequenceType(Type.ELEMENT, Cardinality.MANY,
+						"Structured information."))
 		};
 
 	public GitFunctions(XQueryContext context, FunctionSignature signature) {
@@ -672,6 +681,32 @@ public class GitFunctions extends BasicFunction {
 			}
 			
 			break;
+		}
+		case "describe": {
+			String local = getDir(args[0].toString()).toString();
+			if (!isRepo(new File(local)))
+				throw new XPathException(new ErrorCode("exgit030a", "Not a git repo"),
+						"The selected path is not a git repo: " + local);
+			String description;
+			try (Git git = getRepo(local);)
+			{
+				DescribeCommand describe = git.describe();
+				describe.setTags(true)
+						.setAlways(true);
+				description = describe.call();
+			} catch (Exception e) {
+				throw new XPathException(new ErrorCode("exgit419", "Git API error getting repo info"),
+						"General API getting repo info for " + local + ": " + e.toString());
+			}
+
+			MemTreeBuilder builder = context.getDocumentBuilder();
+			builder.startDocument();
+			builder.startElement(new QName("describe", null, null), null);
+            builder.characters(description);
+			builder.endElement();
+			builder.endDocument();
+
+			return (NodeValue) builder.getDocument().getDocumentElement();
 		}
 		default:
 			throw new XPathException(new ErrorCode("exgit100", "function not found"),
