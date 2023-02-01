@@ -3,3 +3,4 @@ bin/
 *.class
 *.jar
 /exgit.xar
+build/exgit-0.1.xar

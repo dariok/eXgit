@@ -1,0 +1,9 @@
+<meta xmlns="http://exist-db.org/xquery/repo">
+    <description>XQuery based git client</description>
+    <author>Dario Kampkaspar</author>
+    <website>https://github.com/dariok/exgit</website>
+    <status>alpha</status>
+    <license>BSD-3-Clause</license>
+    <copyright>true</copyright>
+    <type>library</type>
+</meta>
